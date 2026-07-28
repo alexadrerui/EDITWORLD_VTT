@@ -49,6 +49,12 @@ export function Inspector() {
   return (
     <div className="panel inspector">
       <h3>Inspetor</h3>
+      <button
+        className={`snap-toggle ${object.snapToObjects ? 'active' : ''}`}
+        onClick={() => updateObject(object.id, { snapToObjects: !object.snapToObjects })}
+      >
+        {object.snapToObjects ? 'Desativar' : 'Ativar'} snap a objetos
+      </button>
       <div className="field-row">
         <span className="field-label">Nome</span>
         <input

@@ -8,9 +8,12 @@ export interface SceneObject {
   rotation: [number, number, number]
   scale: [number, number, number]
   color: string
+  snapToObjects: boolean
 }
 
 export type TransformMode = 'translate' | 'rotate' | 'scale'
+
+export type PositionSnapMode = number | null
 
 export interface SceneMeta {
   id: string

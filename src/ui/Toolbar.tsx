@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { PrimitiveKind, TransformMode } from '../types'
+import type { PositionSnapMode, PrimitiveKind, TransformMode } from '../types'
 import { useEditorStore } from '../state/useEditorStore'
 import { useDropdown } from './useDropdown'
 import { ConfirmDialog } from './ConfirmDialog'
@@ -17,6 +17,53 @@ const MODES: { mode: TransformMode; label: string }[] = [
   { mode: 'rotate', label: 'Rotacionar' },
   { mode: 'scale', label: 'Escalar' },
 ]
+
+const POSITION_SNAP_OPTIONS: PositionSnapMode[] = [null, 0.25, 0.5, 1, 2]
+const ROTATION_SNAP_OPTIONS: (number | null)[] = [null, 5, 15, 45, 90]
+
+function formatSnapLabel(value: number | null, unit: string) {
+  return value === null ? 'Desligado' : `${value}${unit}`
+}
+
+function SnapMenu<T extends number | null>({
+  label,
+  value,
+  options,
+  unit,
+  onChange,
+}: {
+  label: string
+  value: T
+  options: T[]
+  unit: string
+  onChange: (value: T) => void
+}) {
+  const { open, setOpen, rootRef } = useDropdown<HTMLDivElement>()
+
+  return (
+    <div className="dropdown" ref={rootRef}>
+      <button onClick={() => setOpen((v) => !v)}>
+        {label}: {formatSnapLabel(value, unit)}
+      </button>
+      {open && (
+        <div className="dropdown-menu">
+          {options.map((option) => (
+            <button
+              key={option ?? 'off'}
+              className={option === value ? 'active' : ''}
+              onClick={() => {
+                onChange(option)
+                setOpen(false)
+              }}
+            >
+              {formatSnapLabel(option, unit)}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function AddObjectMenu() {
   const addObject = useEditorStore((s) => s.addObject)
@@ -112,6 +159,10 @@ export function Toolbar() {
   const selectedId = useEditorStore((s) => s.selectedId)
   const transformMode = useEditorStore((s) => s.transformMode)
   const setTransformMode = useEditorStore((s) => s.setTransformMode)
+  const positionSnap = useEditorStore((s) => s.positionSnap)
+  const setPositionSnap = useEditorStore((s) => s.setPositionSnap)
+  const rotationSnap = useEditorStore((s) => s.rotationSnap)
+  const setRotationSnap = useEditorStore((s) => s.setRotationSnap)
 
   return (
     <div className="toolbar">
@@ -129,6 +180,23 @@ export function Toolbar() {
             {m.label}
           </button>
         ))}
+      </div>
+
+      <div className="toolbar-group">
+        <SnapMenu
+          label="Grade"
+          value={positionSnap}
+          options={POSITION_SNAP_OPTIONS}
+          unit="m"
+          onChange={setPositionSnap}
+        />
+        <SnapMenu
+          label="Ângulo"
+          value={rotationSnap}
+          options={ROTATION_SNAP_OPTIONS}
+          unit="°"
+          onChange={setRotationSnap}
+        />
       </div>
 
       <div className="toolbar-group">

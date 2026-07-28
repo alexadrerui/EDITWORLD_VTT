@@ -3,12 +3,15 @@ import { TransformControls } from '@react-three/drei'
 import type { Mesh } from 'three'
 import { useEditorStore } from '../state/useEditorStore'
 import { SceneObjectMesh } from './SceneObjectMesh'
+import { snapPositionToNeighbors } from './snapToNeighbors'
 
 export function SceneObjects({ orbitControlsRef }: { orbitControlsRef: React.RefObject<any> }) {
   const objects = useEditorStore((s) => s.objects)
   const selectedId = useEditorStore((s) => s.selectedId)
   const transformMode = useEditorStore((s) => s.transformMode)
   const updateObject = useEditorStore((s) => s.updateObject)
+  const positionSnap = useEditorStore((s) => s.positionSnap)
+  const rotationSnap = useEditorStore((s) => s.rotationSnap)
 
   const meshRefs = useRef(new Map<string, Mesh>())
   const refCallbacks = useRef(new Map<string, (mesh: Mesh | null) => void>())
@@ -43,6 +46,16 @@ export function SceneObjects({ orbitControlsRef }: { orbitControlsRef: React.Ref
         <TransformControls
           object={selectedMesh}
           mode={transformMode}
+          translationSnap={selectedObject.snapToObjects ? null : positionSnap}
+          rotationSnap={rotationSnap !== null ? (rotationSnap * Math.PI) / 180 : null}
+          onObjectChange={() => {
+            if (!selectedObject.snapToObjects || transformMode !== 'translate') return
+            const otherMeshes = objects
+              .filter((o) => o.id !== selectedObject.id)
+              .map((o) => meshRefs.current.get(o.id))
+              .filter((mesh): mesh is Mesh => mesh !== undefined)
+            snapPositionToNeighbors(selectedMesh, otherMeshes)
+          }}
           onMouseDown={() => {
             if (orbitControlsRef.current) orbitControlsRef.current.enabled = false
           }}

@@ -4,6 +4,7 @@ import { usePointerClick } from './usePointerClick'
 
 export function Ground() {
   const select = useEditorStore((s) => s.select)
+  const positionSnap = useEditorStore((s) => s.positionSnap)
   const { onPointerDown, onPointerUp } = usePointerClick((e) => {
     e.stopPropagation()
     select(null)
@@ -23,7 +24,7 @@ export function Ground() {
       </mesh>
       <Grid
         args={[200, 200]}
-        cellSize={1}
+        cellSize={positionSnap ?? 1}
         cellThickness={0.5}
         cellColor="#3a3f47"
         sectionSize={10}

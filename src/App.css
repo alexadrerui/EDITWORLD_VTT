@@ -110,6 +110,32 @@
   overflow-y: auto;
 }
 
+.snap-toggle {
+  display: block;
+  width: 100%;
+  background: #23262d;
+  color: #e4e6eb;
+  border: 1px solid #33373f;
+  border-radius: 5px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  margin-bottom: 14px;
+}
+
+.snap-toggle:hover {
+  background: #2c3038;
+}
+
+.snap-toggle.active {
+  background: #3a6df0;
+  border-color: #3a6df0;
+}
+
+.snap-toggle.active:hover {
+  background: #2f5cd0;
+}
+
 .panel h3 {
   margin: 0 0 12px;
   font-size: 13px;

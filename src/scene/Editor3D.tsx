@@ -26,6 +26,8 @@ export function Editor3D() {
         shadow-camera-right={20}
         shadow-camera-top={20}
         shadow-camera-bottom={-20}
+        shadow-normalBias={0.03}
+        shadow-bias={-0.0005}
       />
 
       <Ground />

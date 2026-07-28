@@ -1,5 +1,11 @@
 import { create } from 'zustand'
-import type { PrimitiveKind, SceneMeta, SceneObject, TransformMode } from '../types'
+import type {
+  PositionSnapMode,
+  PrimitiveKind,
+  SceneMeta,
+  SceneObject,
+  TransformMode,
+} from '../types'
 
 const INDEX_KEY = 'editworld-vtt:scenes'
 const CURRENT_KEY = 'editworld-vtt:current-scene'
@@ -33,7 +39,8 @@ function saveScenesIndex(index: SceneMeta[]) {
 function loadSceneObjects(id: string): SceneObject[] {
   try {
     const raw = localStorage.getItem(sceneDataKey(id))
-    return raw ? (JSON.parse(raw) as SceneObject[]) : []
+    const parsed = raw ? (JSON.parse(raw) as Array<Partial<SceneObject>>) : []
+    return parsed.map((o) => ({ snapToObjects: false, ...o }) as SceneObject)
   } catch {
     return []
   }
@@ -55,6 +62,7 @@ function createPrimitive(kind: PrimitiveKind): SceneObject {
     rotation: [0, 0, 0],
     scale: [1, 1, 1],
     color: '#8a8f98',
+    snapToObjects: false,
   }
 }
 
@@ -74,11 +82,15 @@ interface EditorState {
   selectedId: string | null
   transformMode: TransformMode
   isDirty: boolean
+  positionSnap: PositionSnapMode
+  rotationSnap: number | null
   addObject: (kind: PrimitiveKind) => void
   removeObject: (id: string) => void
   updateObject: (id: string, patch: Partial<SceneObject>) => void
   select: (id: string | null) => void
   setTransformMode: (mode: TransformMode) => void
+  setPositionSnap: (value: PositionSnapMode) => void
+  setRotationSnap: (value: number | null) => void
   saveScene: () => void
   createScene: () => void
   switchScene: (id: string) => void
@@ -91,6 +103,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   selectedId: null,
   transformMode: 'translate',
   isDirty: false,
+  positionSnap: 1,
+  rotationSnap: 15,
 
   addObject: (kind) =>
     set((state) => {
@@ -113,6 +127,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   select: (id) => set({ selectedId: id }),
   setTransformMode: (mode) => set({ transformMode: mode }),
+  setPositionSnap: (value) => set({ positionSnap: value }),
+  setRotationSnap: (value) => set({ rotationSnap: value }),
 
   saveScene: () => {
     const { currentSceneId, objects } = get()
