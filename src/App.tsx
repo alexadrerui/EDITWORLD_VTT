@@ -12,8 +12,8 @@ function App() {
         <Hierarchy />
         <div className="viewport">
           <Editor3D />
+          <Inspector />
         </div>
-        <Inspector />
       </div>
     </div>
   )

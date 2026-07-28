@@ -4,19 +4,21 @@ import type { Mesh } from 'three'
 import type { SceneObject } from '../types'
 import { useEditorStore } from '../state/useEditorStore'
 import { usePointerClick } from './usePointerClick'
+import { PRIMITIVE_BASE_SIZE } from './primitives'
 
 function Geometry({ kind }: { kind: SceneObject['kind'] }) {
+  const [w, h, d] = PRIMITIVE_BASE_SIZE[kind]
   switch (kind) {
     case 'box':
-      return <boxGeometry args={[1, 1, 1]} />
+      return <boxGeometry args={[w, h, d]} />
     case 'sphere':
-      return <sphereGeometry args={[0.6, 32, 32]} />
+      return <sphereGeometry args={[w / 2, 32, 32]} />
     case 'cylinder':
-      return <cylinderGeometry args={[0.5, 0.5, 1, 32]} />
+      return <cylinderGeometry args={[w / 2, w / 2, h, 32]} />
     case 'cone':
-      return <coneGeometry args={[0.6, 1, 32]} />
+      return <coneGeometry args={[w / 2, h, 32]} />
     case 'plane':
-      return <boxGeometry args={[2, 0.05, 2]} />
+      return <boxGeometry args={[w, h, d]} />
   }
 }
 

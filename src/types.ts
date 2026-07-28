@@ -11,7 +11,7 @@ export interface SceneObject {
   snapToObjects: boolean
 }
 
-export type TransformMode = 'translate' | 'rotate' | 'scale'
+export type TransformMode = 'translate' | 'rotate' | 'scale' | 'scaleFree'
 
 export type PositionSnapMode = number | null
 

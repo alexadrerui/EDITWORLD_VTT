@@ -2,8 +2,37 @@ import { useMemo, useRef, useState } from 'react'
 import { TransformControls } from '@react-three/drei'
 import type { Mesh } from 'three'
 import { useEditorStore } from '../state/useEditorStore'
+import { ScaleFaceHandles } from './ScaleFaceHandles'
 import { SceneObjectMesh } from './SceneObjectMesh'
+import { SelectionOutline } from './SelectionOutline'
 import { snapPositionToNeighbors } from './snapToNeighbors'
+
+// "Escalar" (locked) uses our own Loftcraft-style face handles (see
+// ScaleFaceHandles.tsx) instead of TransformControls, so TransformControls
+// only ever runs in 'scale' mode for "escalar livre". Its scale gizmo
+// (three-stdlib's TransformControlsGizmo) always renders both single-axis
+// handles (names 'X'/'Y'/'Z') and free handles — two-axis plane handles
+// ('XY'/'YZ'/'XZ') plus the proportional (uniform 3-axis) handles, drawn as
+// three separate white squares named 'XYZX'/'XYZY'/'XYZZ' — at once, with no
+// built-in prop to show only one group. We wrap the gizmo's own per-frame
+// updateMatrixWorld (which resets every handle's `visible` each frame) so
+// the single-axis ones stay hidden, leaving only the free/proportional ones.
+const LOCKED_AXIS_NAMES = ['X', 'Y', 'Z']
+
+function patchFreeScaleGizmoVisibility(controls: any) {
+  const gizmo = controls.gizmo
+  if (!gizmo || gizmo.__scaleVisibilityPatched) return
+  gizmo.__scaleVisibilityPatched = true
+  const original = gizmo.updateMatrixWorld.bind(gizmo)
+  gizmo.updateMatrixWorld = (force?: boolean) => {
+    original(force)
+    for (const group of [gizmo.gizmo.scale.children, gizmo.picker.scale.children]) {
+      for (const handle of group) {
+        if (LOCKED_AXIS_NAMES.includes(handle.name)) handle.visible = false
+      }
+    }
+  }
+}
 
 export function SceneObjects({ orbitControlsRef }: { orbitControlsRef: React.RefObject<any> }) {
   const objects = useEditorStore((s) => s.objects)
@@ -16,6 +45,10 @@ export function SceneObjects({ orbitControlsRef }: { orbitControlsRef: React.Ref
   const meshRefs = useRef(new Map<string, Mesh>())
   const refCallbacks = useRef(new Map<string, (mesh: Mesh | null) => void>())
   const [, forceUpdate] = useState(0)
+
+  const controlsRefCallback = useRef((instance: any) => {
+    if (instance) patchFreeScaleGizmoVisibility(instance)
+  })
 
   const getRefCallback = (id: string) => {
     let cb = refCallbacks.current.get(id)
@@ -42,10 +75,22 @@ export function SceneObjects({ orbitControlsRef }: { orbitControlsRef: React.Ref
         <SceneObjectMesh key={object.id} object={object} ref={getRefCallback(object.id)} />
       ))}
 
-      {selectedMesh && selectedObject && (
+      {selectedMesh && selectedObject && <SelectionOutline mesh={selectedMesh} />}
+
+      {selectedMesh && selectedObject && transformMode === 'scale' && (
+        <ScaleFaceHandles
+          mesh={selectedMesh}
+          object={selectedObject}
+          updateObject={updateObject}
+          orbitControlsRef={orbitControlsRef}
+        />
+      )}
+
+      {selectedMesh && selectedObject && transformMode !== 'scale' && (
         <TransformControls
+          ref={controlsRefCallback.current}
           object={selectedMesh}
-          mode={transformMode}
+          mode={transformMode === 'scaleFree' ? 'scale' : transformMode}
           translationSnap={selectedObject.snapToObjects ? null : positionSnap}
           rotationSnap={rotationSnap !== null ? (rotationSnap * Math.PI) / 180 : null}
           onObjectChange={() => {

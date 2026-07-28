@@ -112,6 +112,7 @@
 }
 
 .viewport {
+  position: relative;
   flex: 1;
   min-width: 0;
 }
@@ -122,58 +123,6 @@
   background: #1a1d22;
   padding: 14px;
   overflow-y: auto;
-}
-
-.inspector-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 14px;
-}
-
-.inspector-actions button,
-.snap-toggle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  background: #23262d;
-  color: #e4e6eb;
-  border: 1px solid #33373f;
-  border-radius: 5px;
-  padding: 6px 10px;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.inspector-actions button svg,
-.snap-toggle svg {
-  flex-shrink: 0;
-}
-
-.inspector-actions button:hover,
-.snap-toggle:hover {
-  background: #2c3038;
-}
-
-.inspector-actions button.active,
-.snap-toggle.active {
-  background: #3a6df0;
-  border-color: #3a6df0;
-}
-
-.inspector-actions button.active:hover,
-.snap-toggle.active:hover {
-  background: #2f5cd0;
-}
-
-.inspector-actions button.danger {
-  background: #c0392b;
-  border-color: #c0392b;
-}
-
-.inspector-actions button.danger:hover {
-  background: #d64535;
 }
 
 .panel h3 {
@@ -188,8 +137,156 @@
   border-right: 1px solid #2a2e35;
 }
 
-.inspector {
-  border-left: 1px solid #2a2e35;
+/* Floating selection panel — overlays the viewport near the top-right
+   corner (Loftcraft-style) instead of sitting in the layout as a sidebar. */
+.selection-panel {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 260px;
+  max-height: calc(100% - 24px);
+  overflow-y: auto;
+  background: rgba(26, 29, 34, 0.92);
+  backdrop-filter: blur(6px);
+  border: 1px solid #33373f;
+  border-radius: 8px;
+  padding: 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.selection-header {
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #2a2e35;
+}
+
+.selection-category {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: #8a8f98;
+  margin-bottom: 2px;
+}
+
+.selection-name {
+  display: block;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: #e4e6eb;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 2px 0;
+  margin-bottom: 4px;
+}
+
+.selection-name:hover,
+.selection-name:focus {
+  background: #23262d;
+  border-radius: 4px;
+  padding: 2px 6px;
+  margin-left: -6px;
+  outline: none;
+}
+
+.selection-dimensions {
+  display: block;
+  font-size: 12px;
+  color: #8a8f98;
+}
+
+.selection-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.selection-actions-row {
+  display: flex;
+  gap: 8px;
+}
+
+.selection-actions-row button {
+  flex: 1;
+  min-width: 0;
+}
+
+.selection-actions button,
+.snap-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+  background: #23262d;
+  color: #e4e6eb;
+  border: 1px solid #33373f;
+  border-radius: 5px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.action-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.action-label svg {
+  flex-shrink: 0;
+}
+
+.action-shortcut {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: #8a8f98;
+  border: 1px solid #3a3f47;
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+
+.selection-actions button.active .action-shortcut {
+  color: #d7e2ff;
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.selection-actions button:hover,
+.snap-toggle:hover {
+  background: #2c3038;
+}
+
+.selection-actions button.active,
+.snap-toggle.active {
+  background: #3a6df0;
+  border-color: #3a6df0;
+}
+
+.selection-actions button.active:hover,
+.snap-toggle.active:hover {
+  background: #2f5cd0;
+}
+
+.selection-actions button.danger {
+  background: #c0392b;
+  border-color: #c0392b;
+}
+
+.selection-actions button.danger:hover {
+  background: #d64535;
+}
+
+.selection-actions button.danger .action-shortcut {
+  color: #ffd9d3;
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.selection-fields {
+  padding-top: 12px;
+  border-top: 1px solid #2a2e35;
 }
 
 .hierarchy ul {
