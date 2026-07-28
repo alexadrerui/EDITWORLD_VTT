@@ -24,6 +24,9 @@
 }
 
 .toolbar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   background: #23262d;
   color: #e4e6eb;
   border: 1px solid #33373f;
@@ -32,6 +35,10 @@
   font-size: 13px;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
+}
+
+.toolbar button svg {
+  flex-shrink: 0;
 }
 
 .toolbar button:hover:not(:disabled) {
@@ -79,11 +86,18 @@
 }
 
 .dropdown-menu button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   background: transparent;
   border: none;
   text-align: left;
   padding: 6px 8px;
   border-radius: 4px;
+}
+
+.dropdown-menu button svg {
+  flex-shrink: 0;
 }
 
 .dropdown-menu button:hover {
@@ -110,8 +124,18 @@
   overflow-y: auto;
 }
 
+.inspector-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.inspector-actions button,
 .snap-toggle {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   width: 100%;
   background: #23262d;
   color: #e4e6eb;
@@ -120,20 +144,36 @@
   padding: 6px 10px;
   font-size: 12px;
   cursor: pointer;
-  margin-bottom: 14px;
 }
 
+.inspector-actions button svg,
+.snap-toggle svg {
+  flex-shrink: 0;
+}
+
+.inspector-actions button:hover,
 .snap-toggle:hover {
   background: #2c3038;
 }
 
+.inspector-actions button.active,
 .snap-toggle.active {
   background: #3a6df0;
   border-color: #3a6df0;
 }
 
+.inspector-actions button.active:hover,
 .snap-toggle.active:hover {
   background: #2f5cd0;
+}
+
+.inspector-actions button.danger {
+  background: #c0392b;
+  border-color: #c0392b;
+}
+
+.inspector-actions button.danger:hover {
+  background: #d64535;
 }
 
 .panel h3 {

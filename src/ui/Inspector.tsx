@@ -1,3 +1,4 @@
+import { Magnet, RotateCw, Scaling, Trash2 } from 'lucide-react'
 import { useEditorStore } from '../state/useEditorStore'
 
 function Vector3Row({
@@ -35,6 +36,9 @@ export function Inspector() {
   const objects = useEditorStore((s) => s.objects)
   const selectedId = useEditorStore((s) => s.selectedId)
   const updateObject = useEditorStore((s) => s.updateObject)
+  const removeObject = useEditorStore((s) => s.removeObject)
+  const transformMode = useEditorStore((s) => s.transformMode)
+  const setTransformMode = useEditorStore((s) => s.setTransformMode)
   const object = objects.find((o) => o.id === selectedId)
 
   if (!object) {
@@ -49,12 +53,33 @@ export function Inspector() {
   return (
     <div className="panel inspector">
       <h3>Inspetor</h3>
-      <button
-        className={`snap-toggle ${object.snapToObjects ? 'active' : ''}`}
-        onClick={() => updateObject(object.id, { snapToObjects: !object.snapToObjects })}
-      >
-        {object.snapToObjects ? 'Desativar' : 'Ativar'} snap a objetos
-      </button>
+      <div className="inspector-actions">
+        <button
+          className={transformMode === 'rotate' ? 'active' : ''}
+          onClick={() => setTransformMode(transformMode === 'rotate' ? 'translate' : 'rotate')}
+        >
+          <RotateCw size={14} />
+          {transformMode === 'rotate' ? 'Desativar' : 'Ativar'} rotacionar
+        </button>
+        <button
+          className={transformMode === 'scale' ? 'active' : ''}
+          onClick={() => setTransformMode(transformMode === 'scale' ? 'translate' : 'scale')}
+        >
+          <Scaling size={14} />
+          {transformMode === 'scale' ? 'Desativar' : 'Ativar'} escalar
+        </button>
+        <button
+          className={`snap-toggle ${object.snapToObjects ? 'active' : ''}`}
+          onClick={() => updateObject(object.id, { snapToObjects: !object.snapToObjects })}
+        >
+          <Magnet size={14} />
+          {object.snapToObjects ? 'Desativar' : 'Ativar'} snap a objetos
+        </button>
+        <button className="danger" onClick={() => removeObject(object.id)}>
+          <Trash2 size={14} />
+          Excluir objeto
+        </button>
+      </div>
       <div className="field-row">
         <span className="field-label">Nome</span>
         <input

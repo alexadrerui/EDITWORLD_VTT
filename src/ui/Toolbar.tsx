@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import type { PositionSnapMode, PrimitiveKind, TransformMode } from '../types'
+import { useState, type ReactNode } from 'react'
+import { Compass, Grid3x3, Layers, Plus, Save } from 'lucide-react'
+import type { PositionSnapMode, PrimitiveKind } from '../types'
 import { useEditorStore } from '../state/useEditorStore'
 import { useDropdown } from './useDropdown'
 import { ConfirmDialog } from './ConfirmDialog'
@@ -12,12 +13,6 @@ const PRIMITIVES: { kind: PrimitiveKind; label: string }[] = [
   { kind: 'plane', label: 'Placa' },
 ]
 
-const MODES: { mode: TransformMode; label: string }[] = [
-  { mode: 'translate', label: 'Mover' },
-  { mode: 'rotate', label: 'Rotacionar' },
-  { mode: 'scale', label: 'Escalar' },
-]
-
 const POSITION_SNAP_OPTIONS: PositionSnapMode[] = [null, 0.25, 0.5, 1, 2]
 const ROTATION_SNAP_OPTIONS: (number | null)[] = [null, 5, 15, 45, 90]
 
@@ -27,12 +22,14 @@ function formatSnapLabel(value: number | null, unit: string) {
 
 function SnapMenu<T extends number | null>({
   label,
+  icon,
   value,
   options,
   unit,
   onChange,
 }: {
   label: string
+  icon: ReactNode
   value: T
   options: T[]
   unit: string
@@ -43,6 +40,7 @@ function SnapMenu<T extends number | null>({
   return (
     <div className="dropdown" ref={rootRef}>
       <button onClick={() => setOpen((v) => !v)}>
+        {icon}
         {label}: {formatSnapLabel(value, unit)}
       </button>
       {open && (
@@ -71,7 +69,9 @@ function AddObjectMenu() {
 
   return (
     <div className="dropdown" ref={rootRef}>
-      <button onClick={() => setOpen((v) => !v)}>+ Adicionar objeto</button>
+      <button onClick={() => setOpen((v) => !v)}>
+        <Plus size={14} /> Adicionar objeto
+      </button>
       {open && (
         <div className="dropdown-menu">
           {PRIMITIVES.map((p) => (
@@ -111,11 +111,12 @@ function SceneMenu() {
   return (
     <div className="toolbar-group">
       <button className={isDirty ? 'active' : ''} disabled={!isDirty} onClick={() => saveScene()}>
-        Salvar
+        <Save size={14} /> Salvar
       </button>
 
       <div className="dropdown" ref={rootRef}>
         <button onClick={() => setOpen((v) => !v)}>
+          <Layers size={14} />
           Cena: {currentScene?.name}
           {isDirty ? ' •' : ''}
         </button>
@@ -137,7 +138,9 @@ function SceneMenu() {
         )}
       </div>
 
-      <button onClick={() => runOrConfirm(() => createScene())}>+ Nova cena</button>
+      <button onClick={() => runOrConfirm(() => createScene())}>
+        <Plus size={14} /> Nova cena
+      </button>
 
       {pendingAction && (
         <ConfirmDialog
@@ -155,10 +158,6 @@ function SceneMenu() {
 }
 
 export function Toolbar() {
-  const removeObject = useEditorStore((s) => s.removeObject)
-  const selectedId = useEditorStore((s) => s.selectedId)
-  const transformMode = useEditorStore((s) => s.transformMode)
-  const setTransformMode = useEditorStore((s) => s.setTransformMode)
   const positionSnap = useEditorStore((s) => s.positionSnap)
   const setPositionSnap = useEditorStore((s) => s.setPositionSnap)
   const rotationSnap = useEditorStore((s) => s.rotationSnap)
@@ -171,20 +170,9 @@ export function Toolbar() {
       </div>
 
       <div className="toolbar-group">
-        {MODES.map((m) => (
-          <button
-            key={m.mode}
-            className={transformMode === m.mode ? 'active' : ''}
-            onClick={() => setTransformMode(m.mode)}
-          >
-            {m.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="toolbar-group">
         <SnapMenu
           label="Grade"
+          icon={<Grid3x3 size={14} />}
           value={positionSnap}
           options={POSITION_SNAP_OPTIONS}
           unit="m"
@@ -192,20 +180,12 @@ export function Toolbar() {
         />
         <SnapMenu
           label="Ângulo"
+          icon={<Compass size={14} />}
           value={rotationSnap}
           options={ROTATION_SNAP_OPTIONS}
           unit="°"
           onChange={setRotationSnap}
         />
-      </div>
-
-      <div className="toolbar-group">
-        <button
-          disabled={!selectedId}
-          onClick={() => selectedId && removeObject(selectedId)}
-        >
-          Excluir selecionado
-        </button>
       </div>
 
       <SceneMenu />
