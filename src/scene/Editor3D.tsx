@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
+import { WebGPURenderer } from 'three/webgpu'
 import { Ground } from './Ground'
 import { SceneObjects } from './SceneObjects'
 import { useEditorStore } from '../state/useEditorStore'
@@ -14,6 +15,25 @@ export function Editor3D() {
       shadows
       camera={{ position: [10, 10, 10], fov: 50 }}
       onPointerMissed={() => select(null)}
+      gl={
+        // WebGPURenderer with automatic WebGL2 fallback (forceWebGL: false) —
+        // same renderer setup used by the folio-2025-study reference project
+        // (sources/Game/Rendering.js, MIT licensed). Prefers WebGPU when the
+        // browser supports it; falls back to WebGL2 under the same API when
+        // it doesn't, so this doesn't narrow browser support vs. WebGLRenderer.
+        async ({ canvas }) => {
+          const renderer = new WebGPURenderer({
+            // `@types/three`'s WebGPU canvas type and lib.dom's OffscreenCanvas
+            // don't structurally match; both are the same object at runtime.
+            canvas: canvas as HTMLCanvasElement,
+            powerPreference: 'high-performance',
+            antialias: true,
+            forceWebGL: false,
+          })
+          await renderer.init()
+          return renderer
+        }
+      }
     >
       <color attach="background" args={['#14161a']} />
       <ambientLight intensity={1.2} />
