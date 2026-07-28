@@ -57,3 +57,7 @@ src/
 ## Persistência
 
 As cenas são salvas no `localStorage` do navegador ao clicar em **Salvar** na toolbar. Trocar de cena sem salvar exibe um aviso, já que as alterações não salvas são descartadas da memória ao carregar outra cena.
+
+## Licença
+
+Distribuído sob a licença MIT. Veja [LICENSE](./LICENSE) para mais detalhes.
