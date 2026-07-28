@@ -1,32 +1,59 @@
-# React + TypeScript + Vite
+# EDITWORLD VTT
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Ferramenta de edição de terrenos/cenários em 3D — a base para, futuramente, evoluir para um Virtual Tabletop (VTT) jogável.
 
-Currently, two official plugins are available:
+Construída com Vite + React + TypeScript + Three.js (via [react-three-fiber](https://docs.pmnd.rs/react-three-fiber) e [drei](https://github.com/pmndrs/drei)), com estado gerenciado por [Zustand](https://github.com/pmndrs/zustand).
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Funcionalidades
 
-## React Compiler
+- Viewport 3D com grid, iluminação e sombras
+- Adição de primitivas (cubo, esfera, cilindro, cone, placa) via menu
+- Seleção de objetos (clique na cena ou na lista de hierarquia)
+- Gizmo de transformação: mover, rotacionar, escalar
+- Inspetor com edição de nome, posição, rotação, escala e cor
+- Múltiplas cenas, com troca via dropdown e criação de novas cenas
+- Salvamento manual da cena atual (persistida no `localStorage` do navegador)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Pré-requisitos
 
-## Expanding the Oxlint configuration
+- [Node.js](https://nodejs.org/) 18 ou superior
+- npm (instalado junto com o Node)
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+## Como rodar
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+# instalar dependências
+npm install
+
+# subir o servidor de desenvolvimento (http://localhost:5173)
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Abra [http://localhost:5173](http://localhost:5173) no navegador. O Vite recarrega automaticamente a página a cada alteração no código (HMR).
+
+## Outros comandos
+
+```bash
+# build de produção (gera a pasta dist/)
+npm run build
+
+# pré-visualizar o build de produção localmente
+npm run preview
+
+# checar o código com o linter (oxlint)
+npm run lint
+```
+
+## Estrutura do projeto
+
+```
+src/
+  scene/       # Componentes da cena 3D (viewport, chão/grid, objetos, gizmo)
+  state/       # Store Zustand (cenas, objetos, seleção, persistência)
+  ui/          # Painéis de interface (toolbar, hierarquia, inspetor)
+  types.ts     # Tipos compartilhados
+```
+
+## Persistência
+
+As cenas são salvas no `localStorage` do navegador ao clicar em **Salvar** na toolbar. Trocar de cena sem salvar exibe um aviso, já que as alterações não salvas são descartadas da memória ao carregar outra cena.
