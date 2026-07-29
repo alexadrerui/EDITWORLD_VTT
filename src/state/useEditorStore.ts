@@ -2,10 +2,18 @@ import { create } from 'zustand'
 import type {
   PositionSnapMode,
   PrimitiveKind,
+  SceneGroup,
   SceneMeta,
   SceneObject,
+  SceneSettings,
   TransformMode,
 } from '../types'
+
+const DEFAULT_SCENE_SETTINGS: SceneSettings = {
+  backgroundColor: '#14161a',
+  ambientIntensity: 1.2,
+  directionalIntensity: 3,
+}
 
 const INDEX_KEY = 'editworld-vtt:scenes'
 const CURRENT_KEY = 'editworld-vtt:current-scene'
@@ -36,20 +44,49 @@ function saveScenesIndex(index: SceneMeta[]) {
   localStorage.setItem(INDEX_KEY, JSON.stringify(index))
 }
 
-function loadSceneObjects(id: string): SceneObject[] {
+interface SceneData {
+  objects: SceneObject[]
+  groups: SceneGroup[]
+  settings: SceneSettings
+}
+
+function loadSceneData(id: string): SceneData {
+  const empty = { objects: [], groups: [], settings: DEFAULT_SCENE_SETTINGS }
   try {
     const raw = localStorage.getItem(sceneDataKey(id))
-    const parsed = raw ? (JSON.parse(raw) as Array<Partial<SceneObject>>) : []
-    return parsed.map(
-      (o) => ({ snapToObjects: false, locked: false, hidden: false, ...o }) as SceneObject,
+    if (!raw) return empty
+    const parsed: unknown = JSON.parse(raw)
+    // Older saves stored just the objects array directly (no groups/settings yet).
+    const rawObjects = Array.isArray(parsed) ? parsed : ((parsed as SceneData).objects ?? [])
+    const rawGroups = Array.isArray(parsed) ? [] : ((parsed as SceneData).groups ?? [])
+    const rawSettings = Array.isArray(parsed) ? {} : ((parsed as SceneData).settings ?? {})
+    const objects = (rawObjects as Array<Partial<SceneObject>>).map(
+      (o) =>
+        ({
+          snapToObjects: false,
+          locked: false,
+          hidden: false,
+          groupId: null,
+          wireframe: false,
+          flatShading: false,
+          side: 'front',
+          shadowMode: 'both',
+          materialType: 'standard',
+          ...o,
+        }) as SceneObject,
     )
+    const groups = (rawGroups as Array<Partial<SceneGroup>>).map(
+      (g) => ({ locked: false, hidden: false, ...g }) as SceneGroup,
+    )
+    const settings = { ...DEFAULT_SCENE_SETTINGS, ...rawSettings }
+    return { objects, groups, settings }
   } catch {
-    return []
+    return empty
   }
 }
 
-function saveSceneObjects(id: string, objects: SceneObject[]) {
-  localStorage.setItem(sceneDataKey(id), JSON.stringify(objects))
+function saveSceneData(id: string, data: SceneData) {
+  localStorage.setItem(sceneDataKey(id), JSON.stringify(data))
 }
 
 // Undo/redo, kept as a stack of minimal diffs rather than full command
@@ -58,6 +95,10 @@ function saveSceneObjects(id: string, objects: SceneObject[]) {
 // addressed by id in the `objects` array). Scoped to the current scene:
 // cleared on scene switch/create, not persisted, since undoing an edit made
 // in a different scene/session isn't meaningful.
+//
+// Group create/remove/rename/assign and lock/hide (both objects and groups)
+// are deliberately left out of history for now, same reasoning as the
+// existing lock/hide exclusion — view/organization state, not content edits.
 type HistoryEntry =
   | { type: 'add'; object: SceneObject; index: number }
   | { type: 'remove'; object: SceneObject; index: number }
@@ -71,6 +112,7 @@ function pushHistory(stack: HistoryEntry[], entry: HistoryEntry): HistoryEntry[]
 }
 
 let nextObjectId = 1
+let nextGroupId = 1
 
 function createPrimitive(kind: PrimitiveKind): SceneObject {
   const n = nextObjectId++
@@ -85,6 +127,12 @@ function createPrimitive(kind: PrimitiveKind): SceneObject {
     snapToObjects: false,
     locked: false,
     hidden: false,
+    groupId: null,
+    wireframe: false,
+    flatShading: false,
+    side: 'front',
+    shadowMode: 'both',
+    materialType: 'standard',
   }
 }
 
@@ -96,11 +144,14 @@ const initialSceneId = (() => {
   localStorage.setItem(CURRENT_KEY, fallback)
   return fallback
 })()
+const initialSceneData = loadSceneData(initialSceneId)
 
 interface EditorState {
   scenesIndex: SceneMeta[]
   currentSceneId: string
   objects: SceneObject[]
+  groups: SceneGroup[]
+  sceneSettings: SceneSettings
   selectedId: string | null
   transformMode: TransformMode
   isDirty: boolean
@@ -113,6 +164,13 @@ interface EditorState {
   updateObject: (id: string, patch: Partial<SceneObject>) => void
   toggleLocked: (id: string) => void
   toggleHidden: (id: string) => void
+  setObjectGroup: (objectId: string, groupId: string | null) => void
+  createGroup: () => void
+  removeGroup: (id: string) => void
+  renameGroup: (id: string, name: string) => void
+  toggleGroupLocked: (id: string) => void
+  toggleGroupHidden: (id: string) => void
+  updateSceneSettings: (patch: Partial<SceneSettings>) => void
   select: (id: string | null) => void
   setTransformMode: (mode: TransformMode) => void
   setPositionSnap: (value: PositionSnapMode) => void
@@ -128,7 +186,9 @@ interface EditorState {
 export const useEditorStore = create<EditorState>((set, get) => ({
   scenesIndex: initialScenesIndex,
   currentSceneId: initialSceneId,
-  objects: loadSceneObjects(initialSceneId),
+  objects: initialSceneData.objects,
+  groups: initialSceneData.groups,
+  sceneSettings: initialSceneData.settings,
   selectedId: null,
   transformMode: 'translate',
   isDirty: false,
@@ -196,6 +256,61 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       isDirty: true,
     })),
 
+  setObjectGroup: (objectId, groupId) =>
+    set((state) => ({
+      objects: state.objects.map((o) => (o.id === objectId ? { ...o, groupId } : o)),
+      isDirty: true,
+    })),
+
+  createGroup: () =>
+    set((state) => {
+      const group: SceneGroup = {
+        id: genId('group'),
+        name: `Grupo ${nextGroupId++}`,
+        locked: false,
+        hidden: false,
+      }
+      return { groups: [...state.groups, group], isDirty: true }
+    }),
+
+  removeGroup: (id) =>
+    set((state) => ({
+      groups: state.groups.filter((g) => g.id !== id),
+      // Ungroup its children instead of deleting them — losing objects as a
+      // side effect of deleting their group would be a nasty surprise.
+      objects: state.objects.map((o) => (o.groupId === id ? { ...o, groupId: null } : o)),
+      isDirty: true,
+    })),
+
+  renameGroup: (id, name) => {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    set((state) => ({
+      groups: state.groups.map((g) => (g.id === id ? { ...g, name: trimmed } : g)),
+      isDirty: true,
+    }))
+  },
+
+  toggleGroupLocked: (id) =>
+    set((state) => ({
+      groups: state.groups.map((g) => (g.id === id ? { ...g, locked: !g.locked } : g)),
+      isDirty: true,
+    })),
+
+  toggleGroupHidden: (id) =>
+    set((state) => ({
+      groups: state.groups.map((g) => (g.id === id ? { ...g, hidden: !g.hidden } : g)),
+      isDirty: true,
+    })),
+
+  // Not undoable, same reasoning as position/rotation snap settings — an
+  // environment setting, not per-object content.
+  updateSceneSettings: (patch) =>
+    set((state) => ({
+      sceneSettings: { ...state.sceneSettings, ...patch },
+      isDirty: true,
+    })),
+
   select: (id) => set({ selectedId: id }),
   setTransformMode: (mode) => set({ transformMode: mode }),
   setPositionSnap: (value) => set({ positionSnap: value }),
@@ -260,8 +375,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }),
 
   saveScene: () => {
-    const { currentSceneId, objects } = get()
-    saveSceneObjects(currentSceneId, objects)
+    const { currentSceneId, objects, groups, sceneSettings } = get()
+    saveSceneData(currentSceneId, { objects, groups, settings: sceneSettings })
     set({ isDirty: false })
   },
 
@@ -270,12 +385,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const meta: SceneMeta = { id: genId('scene'), name: `Cena ${state.scenesIndex.length + 1}` }
     const scenesIndex = [...state.scenesIndex, meta]
     saveScenesIndex(scenesIndex)
-    saveSceneObjects(meta.id, [])
+    saveSceneData(meta.id, { objects: [], groups: [], settings: DEFAULT_SCENE_SETTINGS })
     localStorage.setItem(CURRENT_KEY, meta.id)
     set({
       scenesIndex,
       currentSceneId: meta.id,
       objects: [],
+      groups: [],
+      sceneSettings: DEFAULT_SCENE_SETTINGS,
       selectedId: null,
       isDirty: false,
       undoStack: [],
@@ -287,9 +404,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const state = get()
     if (id === state.currentSceneId) return
     localStorage.setItem(CURRENT_KEY, id)
+    const data = loadSceneData(id)
     set({
       currentSceneId: id,
-      objects: loadSceneObjects(id),
+      objects: data.objects,
+      groups: data.groups,
+      sceneSettings: data.settings,
       selectedId: null,
       isDirty: false,
       undoStack: [],

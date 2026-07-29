@@ -36,6 +36,7 @@ function patchFreeScaleGizmoVisibility(controls: any) {
 
 export function SceneObjects({ orbitControlsRef }: { orbitControlsRef: React.RefObject<any> }) {
   const objects = useEditorStore((s) => s.objects)
+  const groups = useEditorStore((s) => s.groups)
   const selectedId = useEditorStore((s) => s.selectedId)
   const transformMode = useEditorStore((s) => s.transformMode)
   const updateObject = useEditorStore((s) => s.updateObject)
@@ -68,6 +69,10 @@ export function SceneObjects({ orbitControlsRef }: { orbitControlsRef: React.Ref
     () => objects.find((o) => o.id === selectedId),
     [objects, selectedId],
   )
+  // Group lock cascades to its objects even without real 3D parenting yet.
+  const selectedLocked =
+    !!selectedObject?.locked ||
+    !!groups.find((g) => g.id === selectedObject?.groupId)?.locked
 
   return (
     <>
@@ -79,7 +84,7 @@ export function SceneObjects({ orbitControlsRef }: { orbitControlsRef: React.Ref
         <SelectionOutline mesh={selectedMesh} object={selectedObject} />
       )}
 
-      {selectedMesh && selectedObject && !selectedObject.locked && transformMode === 'scale' && (
+      {selectedMesh && selectedObject && !selectedLocked && transformMode === 'scale' && (
         <ScaleFaceHandles
           mesh={selectedMesh}
           object={selectedObject}
@@ -88,7 +93,7 @@ export function SceneObjects({ orbitControlsRef }: { orbitControlsRef: React.Ref
         />
       )}
 
-      {selectedMesh && selectedObject && !selectedObject.locked && transformMode !== 'scale' && (
+      {selectedMesh && selectedObject && !selectedLocked && transformMode !== 'scale' && (
         <TransformControls
           ref={controlsRefCallback.current}
           object={selectedMesh}

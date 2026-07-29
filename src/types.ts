@@ -1,5 +1,18 @@
 export type PrimitiveKind = 'box' | 'sphere' | 'cylinder' | 'plane' | 'cone'
 
+// Which faces render — mirrors THREE.FrontSide/BackSide/DoubleSide.
+export type MaterialSide = 'front' | 'back' | 'double'
+
+// Cast/receive shadow combination, matching Spline's Visibility > Shadows
+// dropdown (Cast & Receive / Cast only / Receive only / None).
+export type ShadowMode = 'none' | 'cast' | 'receive' | 'both'
+
+// Shading model, matching Spline's Material > Lighting > Type dropdown.
+// 'standard' is our pre-existing default (MeshStandardMaterial, PBR
+// roughness/metalness) and isn't one of Spline's four options — kept as the
+// default here so existing objects keep rendering exactly as before.
+export type MaterialType = 'standard' | 'lambert' | 'phong' | 'physical' | 'toon'
+
 export interface SceneObject {
   id: string
   name: string
@@ -11,6 +24,33 @@ export interface SceneObject {
   snapToObjects: boolean
   locked: boolean
   hidden: boolean
+  groupId: string | null
+  wireframe: boolean
+  flatShading: boolean
+  side: MaterialSide
+  shadowMode: ShadowMode
+  materialType: MaterialType
+}
+
+// Visual/organizational grouping only for now — no real 3D parenting yet
+// (a group has no transform of its own, and objects keep their own
+// world-space position/rotation/scale regardless of group membership).
+// This is the data-model bridge for when we do add real parenting later:
+// SceneObject.groupId already points at the owning group, so adding actual
+// transform composition later is additive, not a redesign.
+export interface SceneGroup {
+  id: string
+  name: string
+  locked: boolean
+  hidden: boolean
+}
+
+// Per-scene environment settings — background color and lighting for now,
+// saved alongside objects/groups so each scene can look different.
+export interface SceneSettings {
+  backgroundColor: string
+  ambientIntensity: number
+  directionalIntensity: number
 }
 
 export type TransformMode = 'translate' | 'rotate' | 'scale' | 'scaleFree'

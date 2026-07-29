@@ -101,6 +101,10 @@
   border-color: transparent;
 }
 
+.dropdown-menu button.active {
+  color: #3a6df0;
+}
+
 .editor-body {
   display: flex;
   flex: 1;
@@ -136,6 +140,17 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: #8a8f98;
+}
+
+.objects-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.objects-header h3 {
+  margin: 0;
 }
 
 .hierarchy {
@@ -186,6 +201,17 @@
   display: block;
   font-size: 12px;
   color: #8a8f98;
+}
+
+.scene-inspector-name {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 2px 0;
+}
+
+.scene-inspector-fields .field-label {
+  width: 84px;
 }
 
 .selection-actions {
@@ -406,6 +432,35 @@
   background: #2f5cd0;
 }
 
+.hierarchy-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #14161a;
+  border: 1px solid #2a2e35;
+  border-radius: 5px;
+  padding: 5px 8px;
+  margin-bottom: 8px;
+  color: #5c6270;
+}
+
+.hierarchy-search input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  color: #e4e6eb;
+  font-size: 13px;
+}
+
+.hierarchy-search input::placeholder {
+  color: #5c6270;
+}
+
+.hierarchy-search input:focus {
+  outline: none;
+}
+
 .hierarchy ul {
   list-style: none;
   margin: 0;
@@ -428,6 +483,12 @@
 
 .hierarchy li.selected {
   background: #3a6df0;
+}
+
+.hierarchy li.child-row {
+  margin-left: 19px;
+  padding-left: 9px;
+  border-left: 1px solid #33373f;
 }
 
 .hierarchy-kind-icon {
@@ -512,11 +573,125 @@
   margin-bottom: 10px;
 }
 
+.field-row--wrap {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
 .field-label {
   width: 48px;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-size: 12px;
   color: #8a8f98;
+}
+
+.field-row--wrap .field-label {
+  width: auto;
+}
+
+.field-section-label {
+  margin: 4px 0 10px;
+  padding-top: 12px;
+  border-top: 1px solid #2a2e35;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #8a8f98;
+}
+
+.axis-lock-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: #5c6270;
+  cursor: pointer;
+}
+
+.axis-lock-toggle:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #e4e6eb;
+}
+
+.axis-lock-toggle.active {
+  color: #3a6df0;
+}
+
+.segmented-control {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  width: 100%;
+}
+
+.segmented-control button {
+  flex: 1;
+  min-width: fit-content;
+  background: #23262d;
+  color: #8a8f98;
+  border: 1px solid #33373f;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.segmented-control button:hover {
+  background: #2c3038;
+  color: #e4e6eb;
+}
+
+.segmented-control button.active {
+  background: #3a6df0;
+  border-color: #3a6df0;
+  color: #fff;
+}
+
+/* In a single-line field-row (label + control sharing one row, like
+   Spline's Visibility section), the control hugs the right edge and sizes
+   to its content instead of stretching to fill the row. */
+.field-row:not(.field-row--wrap) .segmented-control {
+  width: auto;
+  margin-left: auto;
+}
+
+.field-row:not(.field-row--wrap) .segmented-control button {
+  flex: 0 0 auto;
+}
+
+.field-dropdown {
+  margin-left: auto;
+}
+
+.field-dropdown > button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #23262d;
+  color: #e4e6eb;
+  border: 1px solid #33373f;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.field-dropdown > button:hover {
+  background: #2c3038;
+}
+
+.field-dropdown-menu {
+  min-width: 110px;
 }
 
 .field-row input[type='number'] {
@@ -529,6 +704,50 @@
   color: #e4e6eb;
   padding: 4px 3px;
   font-size: 11px;
+}
+
+/* Axis inputs (Position/Rotation/Scale), matching Spline's compact style:
+   the X/Y/Z letter sits inside the same box as the value, colored to read
+   as a unit rather than a separate label. */
+.axis-group {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  gap: 3px;
+}
+
+.axis-field {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  gap: 3px;
+  background: #23262d;
+  border: 1px solid #33373f;
+  border-radius: 4px;
+  padding: 3px 4px;
+}
+
+.axis-field-label {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  color: #5b8cff;
+}
+
+.axis-field input[type='number'] {
+  width: 0;
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  color: #e4e6eb;
+  padding: 0;
+  font-size: 11px;
+}
+
+.axis-field input[type='number']:focus {
+  outline: none;
 }
 
 .field-row input[type='text'] {
