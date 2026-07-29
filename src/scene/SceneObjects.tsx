@@ -75,9 +75,11 @@ export function SceneObjects({ orbitControlsRef }: { orbitControlsRef: React.Ref
         <SceneObjectMesh key={object.id} object={object} ref={getRefCallback(object.id)} />
       ))}
 
-      {selectedMesh && selectedObject && <SelectionOutline mesh={selectedMesh} />}
+      {selectedMesh && selectedObject && (
+        <SelectionOutline mesh={selectedMesh} object={selectedObject} />
+      )}
 
-      {selectedMesh && selectedObject && transformMode === 'scale' && (
+      {selectedMesh && selectedObject && !selectedObject.locked && transformMode === 'scale' && (
         <ScaleFaceHandles
           mesh={selectedMesh}
           object={selectedObject}
@@ -86,7 +88,7 @@ export function SceneObjects({ orbitControlsRef }: { orbitControlsRef: React.Ref
         />
       )}
 
-      {selectedMesh && selectedObject && transformMode !== 'scale' && (
+      {selectedMesh && selectedObject && !selectedObject.locked && transformMode !== 'scale' && (
         <TransformControls
           ref={controlsRefCallback.current}
           object={selectedMesh}

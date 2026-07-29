@@ -2,7 +2,7 @@ import { useMemo, useRef } from 'react'
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { Group, Mesh, Plane, Quaternion, Raycaster, Vector2, Vector3 } from 'three'
 import type { SceneObject } from '../types'
-import { PRIMITIVE_BASE_SIZE } from './primitives'
+import { PRIMITIVE_BASE_SIZE, SELECTION_OUTLINE_PADDING } from './primitives'
 
 // Loftcraft-style face handles: unlike the built-in axis gizmo (which grows
 // an object symmetrically around its center pivot), dragging one of these
@@ -24,7 +24,7 @@ const MIN_SCALE = 0.05
 const HANDLE_SIZE_FRACTION = 0.35
 const HANDLE_THICKNESS_FRACTION = 0.25
 const HANDLE_MIN_SIZE = 0.08
-const HANDLE_MAX_SIZE = 1.2
+const HANDLE_MAX_SIZE = 0.45
 
 export function ScaleFaceHandles({
   mesh,
@@ -65,6 +65,11 @@ export function ScaleFaceHandles({
   // than a single size shared across all 5 — keeps it proportionate on
   // elongated objects and means it visibly grows/shrinks as that specific
   // face grows/shrinks, instead of a fixed size regardless of surface size.
+  //
+  // Positions (and the dimensions used to size them) are based on the
+  // padded selection-box extent, not the object's own surface — the handles
+  // sit flush on the selection outline (see SelectionOutline.tsx), so they
+  // read as part of that box rather than stuck to the object itself.
   useFrame(() => {
     const group = groupRef.current
     if (!group) return
@@ -72,14 +77,14 @@ export function ScaleFaceHandles({
     group.quaternion.copy(mesh.quaternion)
 
     const fullExtent = [
-      baseHalf[0] * 2 * mesh.scale.x,
-      baseHalf[1] * 2 * mesh.scale.y,
-      baseHalf[2] * 2 * mesh.scale.z,
+      baseHalf[0] * 2 * SELECTION_OUTLINE_PADDING * mesh.scale.x,
+      baseHalf[1] * 2 * SELECTION_OUTLINE_PADDING * mesh.scale.y,
+      baseHalf[2] * 2 * SELECTION_OUTLINE_PADDING * mesh.scale.z,
     ]
     const halfExtent = [
-      baseHalf[0] * mesh.scale.x,
-      baseHalf[1] * mesh.scale.y,
-      baseHalf[2] * mesh.scale.z,
+      baseHalf[0] * SELECTION_OUTLINE_PADDING * mesh.scale.x,
+      baseHalf[1] * SELECTION_OUTLINE_PADDING * mesh.scale.y,
+      baseHalf[2] * SELECTION_OUTLINE_PADDING * mesh.scale.z,
     ]
 
     for (const face of FACES) {
