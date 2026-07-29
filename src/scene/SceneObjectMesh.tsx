@@ -33,6 +33,13 @@ export const SceneObjectMesh = forwardRef<Mesh, { object: SceneObject }>(
       select(object.id)
     })
 
+    // Three.js raycasting ignores `visible` (only rendering respects it), so
+    // a hidden object would still be clickable/draggable if just toggled via
+    // a `visible` prop. Skipping the mesh entirely instead removes it from
+    // both rendering and hit-testing, and un-registers its ref (no gizmo/
+    // outline can target it while hidden, which is the point).
+    if (object.hidden) return null
+
     return (
       <mesh
         ref={ref}

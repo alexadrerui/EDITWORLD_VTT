@@ -56,10 +56,6 @@
   cursor: not-allowed;
 }
 
-.toolbar > .toolbar-group:last-child {
-  margin-left: auto;
-}
-
 .dropdown {
   position: relative;
 }
@@ -117,32 +113,12 @@
   min-width: 0;
 }
 
-.panel {
-  width: 260px;
-  flex-shrink: 0;
-  background: #1a1d22;
-  padding: 14px;
-  overflow-y: auto;
-}
-
-.panel h3 {
-  margin: 0 0 12px;
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #8a8f98;
-}
-
-.hierarchy {
-  border-right: 1px solid #2a2e35;
-}
-
-/* Floating selection panel — overlays the viewport near the top-right
-   corner (Loftcraft-style) instead of sitting in the layout as a sidebar. */
-.selection-panel {
+/* Shared look for the floating panels overlaid on the viewport (Loftcraft-
+   style) — Hierarchy top-left, the selection Inspector top-right — instead
+   of either sitting in the layout as a docked sidebar. */
+.floating-panel {
   position: absolute;
   top: 12px;
-  right: 12px;
   width: 260px;
   max-height: calc(100% - 24px);
   overflow-y: auto;
@@ -152,6 +128,22 @@
   border-radius: 8px;
   padding: 14px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.floating-panel h3 {
+  margin: 0 0 12px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #8a8f98;
+}
+
+.hierarchy {
+  left: 12px;
+}
+
+.selection-panel {
+  right: 12px;
 }
 
 .selection-header {
@@ -289,6 +281,131 @@
   border-top: 1px solid #2a2e35;
 }
 
+.scenes-section {
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #2a2e35;
+}
+
+.scenes-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.scenes-collapse {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  padding: 2px 0;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #8a8f98;
+  cursor: pointer;
+}
+
+.scenes-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  color: #8a8f98;
+  cursor: pointer;
+}
+
+.scenes-add:hover {
+  background: #23262d;
+  color: #e4e6eb;
+}
+
+.scenes-list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+}
+
+.scenes-list li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.scenes-list li:hover {
+  background: #23262d;
+}
+
+.scenes-list li.selected {
+  font-weight: 600;
+}
+
+.scenes-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  flex-shrink: 0;
+  color: #e4e6eb;
+}
+
+.scenes-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scenes-home-icon {
+  flex-shrink: 0;
+  color: #5c6270;
+}
+
+.scenes-list li.selected .scenes-home-icon {
+  color: #d7e2ff;
+}
+
+.scenes-save {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  background: #23262d;
+  color: #8a8f98;
+  border: 1px solid #33373f;
+  border-radius: 5px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.scenes-save:disabled {
+  cursor: not-allowed;
+}
+
+.scenes-save.active {
+  background: #3a6df0;
+  border-color: #3a6df0;
+  color: #fff;
+}
+
+.scenes-save.active:hover {
+  background: #2f5cd0;
+}
+
 .hierarchy ul {
   list-style: none;
   margin: 0;
@@ -296,6 +413,9 @@
 }
 
 .hierarchy li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   padding: 6px 8px;
   border-radius: 4px;
   cursor: pointer;
@@ -308,6 +428,76 @@
 
 .hierarchy li.selected {
   background: #3a6df0;
+}
+
+.hierarchy-kind-icon {
+  flex-shrink: 0;
+  color: #8a8f98;
+}
+
+.hierarchy li.selected .hierarchy-kind-icon {
+  color: #e4e6eb;
+}
+
+.hierarchy-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hierarchy-rename-input {
+  flex: 1;
+  min-width: 0;
+  background: #14161a;
+  border: 1px solid #3a6df0;
+  border-radius: 3px;
+  color: #e4e6eb;
+  font-size: 13px;
+  padding: 1px 4px;
+}
+
+.hierarchy-row-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+  opacity: 0;
+}
+
+.hierarchy li:hover .hierarchy-row-actions,
+.hierarchy li.has-state .hierarchy-row-actions {
+  opacity: 1;
+}
+
+.hierarchy-row-actions button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  color: #8a8f98;
+  cursor: pointer;
+}
+
+.hierarchy-row-actions button:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #e4e6eb;
+}
+
+.hierarchy-row-actions button.active {
+  color: #ffd966;
+}
+
+.hierarchy li.selected .hierarchy-row-actions button {
+  color: #d7e2ff;
+}
+
+.hierarchy li.selected .hierarchy-row-actions button.active {
+  color: #ffe58a;
 }
 
 .empty {

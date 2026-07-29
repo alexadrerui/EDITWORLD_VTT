@@ -9,6 +9,8 @@ export interface SceneObject {
   scale: [number, number, number]
   color: string
   snapToObjects: boolean
+  locked: boolean
+  hidden: boolean
 }
 
 export type TransformMode = 'translate' | 'rotate' | 'scale' | 'scaleFree'

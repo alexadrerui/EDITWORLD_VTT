@@ -40,7 +40,9 @@ function loadSceneObjects(id: string): SceneObject[] {
   try {
     const raw = localStorage.getItem(sceneDataKey(id))
     const parsed = raw ? (JSON.parse(raw) as Array<Partial<SceneObject>>) : []
-    return parsed.map((o) => ({ snapToObjects: false, ...o }) as SceneObject)
+    return parsed.map(
+      (o) => ({ snapToObjects: false, locked: false, hidden: false, ...o }) as SceneObject,
+    )
   } catch {
     return []
   }
@@ -48,6 +50,24 @@ function loadSceneObjects(id: string): SceneObject[] {
 
 function saveSceneObjects(id: string, objects: SceneObject[]) {
   localStorage.setItem(sceneDataKey(id), JSON.stringify(objects))
+}
+
+// Undo/redo, kept as a stack of minimal diffs rather than full command
+// classes (no scene-graph/uuid-lookup layer to route through like a
+// three.js-editor-style Command — objects here are plain data already
+// addressed by id in the `objects` array). Scoped to the current scene:
+// cleared on scene switch/create, not persisted, since undoing an edit made
+// in a different scene/session isn't meaningful.
+type HistoryEntry =
+  | { type: 'add'; object: SceneObject; index: number }
+  | { type: 'remove'; object: SceneObject; index: number }
+  | { type: 'update'; id: string; before: Partial<SceneObject>; after: Partial<SceneObject> }
+
+const MAX_HISTORY = 50
+
+function pushHistory(stack: HistoryEntry[], entry: HistoryEntry): HistoryEntry[] {
+  const next = [...stack, entry]
+  return next.length > MAX_HISTORY ? next.slice(next.length - MAX_HISTORY) : next
 }
 
 let nextObjectId = 1
@@ -63,6 +83,8 @@ function createPrimitive(kind: PrimitiveKind): SceneObject {
     scale: [1, 1, 1],
     color: '#8a8f98',
     snapToObjects: false,
+    locked: false,
+    hidden: false,
   }
 }
 
@@ -84,16 +106,23 @@ interface EditorState {
   isDirty: boolean
   positionSnap: PositionSnapMode
   rotationSnap: number | null
+  undoStack: HistoryEntry[]
+  redoStack: HistoryEntry[]
   addObject: (kind: PrimitiveKind) => void
   removeObject: (id: string) => void
   updateObject: (id: string, patch: Partial<SceneObject>) => void
+  toggleLocked: (id: string) => void
+  toggleHidden: (id: string) => void
   select: (id: string | null) => void
   setTransformMode: (mode: TransformMode) => void
   setPositionSnap: (value: PositionSnapMode) => void
   setRotationSnap: (value: number | null) => void
+  undo: () => void
+  redo: () => void
   saveScene: () => void
   createScene: () => void
   switchScene: (id: string) => void
+  renameScene: (id: string, name: string) => void
 }
 
 export const useEditorStore = create<EditorState>((set, get) => ({
@@ -105,23 +134,65 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   isDirty: false,
   positionSnap: 1,
   rotationSnap: 15,
+  undoStack: [],
+  redoStack: [],
 
   addObject: (kind) =>
     set((state) => {
       const obj = createPrimitive(kind)
-      return { objects: [...state.objects, obj], selectedId: obj.id, isDirty: true }
+      const index = state.objects.length
+      return {
+        objects: [...state.objects, obj],
+        selectedId: obj.id,
+        isDirty: true,
+        undoStack: pushHistory(state.undoStack, { type: 'add', object: obj, index }),
+        redoStack: [],
+      }
     }),
 
   removeObject: (id) =>
+    set((state) => {
+      const index = state.objects.findIndex((o) => o.id === id)
+      if (index === -1) return {}
+      const object = state.objects[index]
+      return {
+        objects: state.objects.filter((o) => o.id !== id),
+        selectedId: state.selectedId === id ? null : state.selectedId,
+        isDirty: true,
+        undoStack: pushHistory(state.undoStack, { type: 'remove', object, index }),
+        redoStack: [],
+      }
+    }),
+
+  updateObject: (id, patch) =>
+    set((state) => {
+      const current = state.objects.find((o) => o.id === id)
+      if (!current) return {}
+      const before: Record<string, unknown> = {}
+      for (const key of Object.keys(patch) as (keyof SceneObject)[]) {
+        before[key] = current[key]
+      }
+      return {
+        objects: state.objects.map((o) => (o.id === id ? { ...o, ...patch } : o)),
+        isDirty: true,
+        undoStack: pushHistory(state.undoStack, { type: 'update', id, before, after: patch }),
+        redoStack: [],
+      }
+    }),
+
+  // Lock/hide are view-state toggles, not content edits — like Blender's
+  // outliner, they're deliberately excluded from undo/redo history so
+  // freely toggling them while inspecting a scene doesn't bury real edits
+  // under a pile of undo steps.
+  toggleLocked: (id) =>
     set((state) => ({
-      objects: state.objects.filter((o) => o.id !== id),
-      selectedId: state.selectedId === id ? null : state.selectedId,
+      objects: state.objects.map((o) => (o.id === id ? { ...o, locked: !o.locked } : o)),
       isDirty: true,
     })),
 
-  updateObject: (id, patch) =>
+  toggleHidden: (id) =>
     set((state) => ({
-      objects: state.objects.map((o) => (o.id === id ? { ...o, ...patch } : o)),
+      objects: state.objects.map((o) => (o.id === id ? { ...o, hidden: !o.hidden } : o)),
       isDirty: true,
     })),
 
@@ -129,6 +200,64 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setTransformMode: (mode) => set({ transformMode: mode }),
   setPositionSnap: (value) => set({ positionSnap: value }),
   setRotationSnap: (value) => set({ rotationSnap: value }),
+
+  undo: () =>
+    set((state) => {
+      const entry = state.undoStack[state.undoStack.length - 1]
+      if (!entry) return {}
+      const undoStack = state.undoStack.slice(0, -1)
+      const redoStack = [...state.redoStack, entry]
+
+      if (entry.type === 'add') {
+        return {
+          objects: state.objects.filter((o) => o.id !== entry.object.id),
+          selectedId: state.selectedId === entry.object.id ? null : state.selectedId,
+          isDirty: true,
+          undoStack,
+          redoStack,
+        }
+      }
+      if (entry.type === 'remove') {
+        const objects = [...state.objects]
+        objects.splice(entry.index, 0, entry.object)
+        return { objects, selectedId: entry.object.id, isDirty: true, undoStack, redoStack }
+      }
+      return {
+        objects: state.objects.map((o) => (o.id === entry.id ? { ...o, ...entry.before } : o)),
+        isDirty: true,
+        undoStack,
+        redoStack,
+      }
+    }),
+
+  redo: () =>
+    set((state) => {
+      const entry = state.redoStack[state.redoStack.length - 1]
+      if (!entry) return {}
+      const redoStack = state.redoStack.slice(0, -1)
+      const undoStack = [...state.undoStack, entry]
+
+      if (entry.type === 'add') {
+        const objects = [...state.objects]
+        objects.splice(entry.index, 0, entry.object)
+        return { objects, selectedId: entry.object.id, isDirty: true, undoStack, redoStack }
+      }
+      if (entry.type === 'remove') {
+        return {
+          objects: state.objects.filter((o) => o.id !== entry.object.id),
+          selectedId: state.selectedId === entry.object.id ? null : state.selectedId,
+          isDirty: true,
+          undoStack,
+          redoStack,
+        }
+      }
+      return {
+        objects: state.objects.map((o) => (o.id === entry.id ? { ...o, ...entry.after } : o)),
+        isDirty: true,
+        undoStack,
+        redoStack,
+      }
+    }),
 
   saveScene: () => {
     const { currentSceneId, objects } = get()
@@ -143,7 +272,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     saveScenesIndex(scenesIndex)
     saveSceneObjects(meta.id, [])
     localStorage.setItem(CURRENT_KEY, meta.id)
-    set({ scenesIndex, currentSceneId: meta.id, objects: [], selectedId: null, isDirty: false })
+    set({
+      scenesIndex,
+      currentSceneId: meta.id,
+      objects: [],
+      selectedId: null,
+      isDirty: false,
+      undoStack: [],
+      redoStack: [],
+    })
   },
 
   switchScene: (id) => {
@@ -155,6 +292,16 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       objects: loadSceneObjects(id),
       selectedId: null,
       isDirty: false,
+      undoStack: [],
+      redoStack: [],
     })
+  },
+
+  renameScene: (id, name) => {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    const scenesIndex = get().scenesIndex.map((s) => (s.id === id ? { ...s, name: trimmed } : s))
+    saveScenesIndex(scenesIndex)
+    set({ scenesIndex })
   },
 }))

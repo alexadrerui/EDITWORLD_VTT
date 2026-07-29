@@ -86,7 +86,7 @@ export function Inspector() {
   const dimensions = baseSize.map((size, i) => size * object.scale[i]) as [number, number, number]
 
   return (
-    <div className="selection-panel">
+    <div className="floating-panel selection-panel">
       <div className="selection-header">
         <span className="selection-category">{PRIMITIVE_LABEL[object.kind].toUpperCase()}</span>
         <input

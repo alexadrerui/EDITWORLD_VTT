@@ -9,9 +9,9 @@ function App() {
     <div className="editor-layout">
       <Toolbar />
       <div className="editor-body">
-        <Hierarchy />
         <div className="viewport">
           <Editor3D />
+          <Hierarchy />
           <Inspector />
         </div>
       </div>

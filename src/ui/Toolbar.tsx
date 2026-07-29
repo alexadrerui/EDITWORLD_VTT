@@ -1,9 +1,8 @@
-import { useState, type ReactNode } from 'react'
-import { Compass, Grid3x3, Layers, Plus, Save } from 'lucide-react'
+import { useEffect, type ReactNode } from 'react'
+import { Compass, Grid3x3, Plus, Redo2, Undo2 } from 'lucide-react'
 import type { PositionSnapMode, PrimitiveKind } from '../types'
 import { useEditorStore } from '../state/useEditorStore'
 import { useDropdown } from './useDropdown'
-import { ConfirmDialog } from './ConfirmDialog'
 
 const PRIMITIVES: { kind: PrimitiveKind; label: string }[] = [
   { kind: 'box', label: 'Cubo' },
@@ -63,6 +62,39 @@ function SnapMenu<T extends number | null>({
   )
 }
 
+function HistoryButtons() {
+  const canUndo = useEditorStore((s) => s.undoStack.length > 0)
+  const canRedo = useEditorStore((s) => s.redoStack.length > 0)
+  const undo = useEditorStore((s) => s.undo)
+  const redo = useEditorStore((s) => s.redo)
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return
+      const target = e.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return
+      if (e.key.toLowerCase() !== 'z') return
+
+      e.preventDefault()
+      if (e.shiftKey) useEditorStore.getState().redo()
+      else useEditorStore.getState().undo()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
+  return (
+    <div className="toolbar-group">
+      <button disabled={!canUndo} onClick={() => undo()} title="Desfazer (Ctrl+Z)">
+        <Undo2 size={14} />
+      </button>
+      <button disabled={!canRedo} onClick={() => redo()} title="Refazer (Ctrl+Shift+Z)">
+        <Redo2 size={14} />
+      </button>
+    </div>
+  )
+}
+
 function AddObjectMenu() {
   const addObject = useEditorStore((s) => s.addObject)
   const { open, setOpen, rootRef } = useDropdown<HTMLDivElement>()
@@ -91,72 +123,6 @@ function AddObjectMenu() {
   )
 }
 
-function SceneMenu() {
-  const scenesIndex = useEditorStore((s) => s.scenesIndex)
-  const currentSceneId = useEditorStore((s) => s.currentSceneId)
-  const isDirty = useEditorStore((s) => s.isDirty)
-  const switchScene = useEditorStore((s) => s.switchScene)
-  const createScene = useEditorStore((s) => s.createScene)
-  const saveScene = useEditorStore((s) => s.saveScene)
-  const { open, setOpen, rootRef } = useDropdown<HTMLDivElement>()
-  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null)
-
-  const currentScene = scenesIndex.find((s) => s.id === currentSceneId)
-
-  const runOrConfirm = (action: () => void) => {
-    if (isDirty) setPendingAction(() => action)
-    else action()
-  }
-
-  return (
-    <div className="toolbar-group">
-      <button className={isDirty ? 'active' : ''} disabled={!isDirty} onClick={() => saveScene()}>
-        <Save size={14} /> Salvar
-      </button>
-
-      <div className="dropdown" ref={rootRef}>
-        <button onClick={() => setOpen((v) => !v)}>
-          <Layers size={14} />
-          Cena: {currentScene?.name}
-          {isDirty ? ' •' : ''}
-        </button>
-        {open && (
-          <div className="dropdown-menu dropdown-menu--right">
-            {scenesIndex.map((scene) => (
-              <button
-                key={scene.id}
-                className={scene.id === currentSceneId ? 'active' : ''}
-                onClick={() => {
-                  setOpen(false)
-                  runOrConfirm(() => switchScene(scene.id))
-                }}
-              >
-                {scene.name}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <button onClick={() => runOrConfirm(() => createScene())}>
-        <Plus size={14} /> Nova cena
-      </button>
-
-      {pendingAction && (
-        <ConfirmDialog
-          message="Há alterações não salvas na cena atual. Elas serão perdidas ao continuar."
-          confirmLabel="Descartar e continuar"
-          onCancel={() => setPendingAction(null)}
-          onConfirm={() => {
-            pendingAction()
-            setPendingAction(null)
-          }}
-        />
-      )}
-    </div>
-  )
-}
-
 export function Toolbar() {
   const positionSnap = useEditorStore((s) => s.positionSnap)
   const setPositionSnap = useEditorStore((s) => s.setPositionSnap)
@@ -168,6 +134,8 @@ export function Toolbar() {
       <div className="toolbar-group">
         <AddObjectMenu />
       </div>
+
+      <HistoryButtons />
 
       <div className="toolbar-group">
         <SnapMenu
@@ -187,8 +155,6 @@ export function Toolbar() {
           onChange={setRotationSnap}
         />
       </div>
-
-      <SceneMenu />
     </div>
   )
 }
