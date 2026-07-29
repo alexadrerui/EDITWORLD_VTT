@@ -1,11 +1,21 @@
 import type { ReactNode } from 'react'
-import { Axis3d, Compass, Grid3x3, LayoutGrid, Lightbulb, Sparkles } from 'lucide-react'
-import type { GraphicsQuality, PositionSnapMode } from '../types'
+import { Axis3d, Compass, Grid3x3, LayoutGrid, Lightbulb, Sparkles, Video } from 'lucide-react'
+import type { AxisView, GraphicsQuality, PositionSnapMode } from '../types'
 import { useEditorStore } from '../state/useEditorStore'
 import { useDropdown } from './useDropdown'
 
 const POSITION_SNAP_OPTIONS: PositionSnapMode[] = [null, 0.25, 0.5, 1, 2]
 const ROTATION_SNAP_OPTIONS: (number | null)[] = [null, 5, 15, 45, 90]
+
+// Interverse Engine's front/back/top/left/right quick-view buttons (see
+// editworld-vtt skill notes) — order matches how they're laid out there.
+const AXIS_VIEW_OPTIONS: { value: AxisView; label: string }[] = [
+  { value: 'front', label: 'Frente' },
+  { value: 'back', label: 'Trás' },
+  { value: 'top', label: 'Topo' },
+  { value: 'left', label: 'Esquerda' },
+  { value: 'right', label: 'Direita' },
+]
 
 const QUALITY_OPTIONS: { value: GraphicsQuality; label: string; description: string }[] = [
   { value: 'low', label: 'Baixo', description: 'Sem sombras' },
@@ -102,6 +112,39 @@ function QualityMenu({
   )
 }
 
+// "Vista" dropdown — snaps the camera to a fixed axis-aligned direction while
+// keeping the current OrbitControls target/distance (see Editor3D.tsx's
+// AXIS_VIEW_DIRECTIONS/requestAxisView). Not a toggle with an "active" state
+// like the other dropdowns here — orbiting away afterward doesn't un-snap
+// anything, so no option is ever highlighted.
+function ViewMenu({ onSelect }: { onSelect: (axis: AxisView) => void }) {
+  const { open, setOpen, rootRef } = useDropdown<HTMLDivElement>()
+
+  return (
+    <div className="dropdown" ref={rootRef}>
+      <button onClick={() => setOpen((v) => !v)}>
+        <Video size={14} />
+        Vista
+      </button>
+      {open && (
+        <div className="dropdown-menu dropdown-menu--up">
+          {AXIS_VIEW_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              onClick={() => {
+                onSelect(option.value)
+                setOpen(false)
+              }}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function SnapBar() {
   const positionSnap = useEditorStore((s) => s.positionSnap)
   const setPositionSnap = useEditorStore((s) => s.setPositionSnap)
@@ -117,6 +160,9 @@ export function SnapBar() {
   const setQuality = useEditorStore((s) => s.setQuality)
   const cameraProjection = useEditorStore((s) => s.cameraProjection)
   const toggleCameraProjection = useEditorStore((s) => s.toggleCameraProjection)
+  const gizmoSpace = useEditorStore((s) => s.gizmoSpace)
+  const setGizmoSpace = useEditorStore((s) => s.setGizmoSpace)
+  const requestAxisView = useEditorStore((s) => s.requestAxisView)
 
   return (
     <div className="snap-bar">
@@ -152,6 +198,24 @@ export function SnapBar() {
       >
         <Axis3d size={14} />
       </button>
+      <ViewMenu onSelect={requestAxisView} />
+      <div className="snap-bar-divider" />
+      <div className="snap-bar-unit-group">
+        <button
+          className={gizmoSpace === 'local' ? 'active' : ''}
+          onClick={() => setGizmoSpace('local')}
+          title="Gizmo no espaço local do objeto"
+        >
+          Local
+        </button>
+        <button
+          className={gizmoSpace === 'world' ? 'active' : ''}
+          onClick={() => setGizmoSpace('world')}
+          title="Gizmo no espaço do mundo"
+        >
+          Mundo
+        </button>
+      </div>
       <div className="snap-bar-divider" />
       <SnapMenu
         label="Grade"

@@ -43,6 +43,7 @@ export function SceneObjects({ orbitControlsRef }: { orbitControlsRef: React.Ref
   const updateObject = useEditorStore((s) => s.updateObject)
   const positionSnap = useEditorStore((s) => s.positionSnap)
   const rotationSnap = useEditorStore((s) => s.rotationSnap)
+  const gizmoSpace = useEditorStore((s) => s.gizmoSpace)
 
   const meshRefs = useRef(new Map<string, Mesh>())
   const refCallbacks = useRef(new Map<string, (mesh: Mesh | null) => void>())
@@ -108,6 +109,7 @@ export function SceneObjects({ orbitControlsRef }: { orbitControlsRef: React.Ref
           ref={controlsRefCallback.current}
           object={selectedMesh}
           mode={effectiveTransformMode === 'scaleFree' ? 'scale' : effectiveTransformMode}
+          space={gizmoSpace}
           translationSnap={selectedObject.snapToObjects ? null : positionSnap}
           rotationSnap={rotationSnap !== null ? (rotationSnap * Math.PI) / 180 : null}
           onObjectChange={() => {

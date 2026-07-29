@@ -9,7 +9,7 @@ import { Ground } from './Ground'
 import { PRIMITIVE_BASE_SIZE } from './primitives'
 import { SceneObjects } from './SceneObjects'
 import { useEditorStore } from '../state/useEditorStore'
-import type { SceneObject } from '../types'
+import type { AxisView, SceneObject } from '../types'
 
 const BLOOM_STRENGTH = 1.5
 const BLOOM_RADIUS = 0.4
@@ -119,6 +119,19 @@ const ORTHO_FRUSTUM_SIZE = 20
 const WORLD_UP = new Vector3(0, 1, 0)
 const GIMBAL_SAFE_UP = new Vector3(0, 0, 1)
 
+// Axis-aligned view snap (Interverse Engine's front/back/top/left/right
+// buttons) — the direction the camera sits *away from* the target along, so
+// e.g. 'front' places the camera in front of the scene looking toward -Z.
+// Arbitrary but internally consistent convention (three.js has no canonical
+// "front"); doesn't need to match any other tool's choice.
+const AXIS_VIEW_DIRECTIONS: Record<AxisView, Vector3> = {
+  front: new Vector3(0, 0, 1),
+  back: new Vector3(0, 0, -1),
+  top: new Vector3(0, 1, 0),
+  left: new Vector3(-1, 0, 0),
+  right: new Vector3(1, 0, 0),
+}
+
 // Repositions `camera` along `direction` at `distance` from `target`, and (for
 // an orthographic camera) sets `zoom` so the same vertical extent stays
 // visible as a perspective camera with `perspectiveFovDeg` would show at that
@@ -155,10 +168,14 @@ function frameCamera(
 //     the current viewing angle (kokraf-style, not a fixed top-down snap).
 //   - `focusNonce`/`focusTargetId`: "frame selection", Spline's "Centralizar
 //     no objeto"/kokraf's focusObjects(), reusing the same frameCamera() math.
+//   - `axisViewNonce`/`axisView`: Interverse Engine's front/back/top/left/
+//     right buttons, same frameCamera() math again with a fixed direction.
 function CameraRig({ orbitControlsRef }: { orbitControlsRef: RefObject<any> }) {
   const cameraProjection = useEditorStore((s) => s.cameraProjection)
   const focusNonce = useEditorStore((s) => s.focusNonce)
   const focusTargetId = useEditorStore((s) => s.focusTargetId)
+  const axisViewNonce = useEditorStore((s) => s.axisViewNonce)
+  const axisView = useEditorStore((s) => s.axisView)
   const objects = useEditorStore((s) => s.objects)
 
   const camera = useThree((s) => s.camera)
@@ -268,6 +285,30 @@ function CameraRig({ orbitControlsRef }: { orbitControlsRef: RefObject<any> }) {
     controls.target.copy(target)
     controls.update()
   }, [focusNonce, focusTargetId, objects, camera, orbitControlsRef])
+
+  const prevAxisViewNonceRef = useRef(axisViewNonce)
+  useEffect(() => {
+    if (prevAxisViewNonceRef.current === axisViewNonce) return
+    prevAxisViewNonceRef.current = axisViewNonce
+    const controls = orbitControlsRef.current
+    const perspectiveCamera = perspectiveCameraRef.current
+    if (!controls || !perspectiveCamera || !axisView) return
+
+    // Preserve target/distance (so zoom level and pivot don't jump) — only
+    // the viewing direction snaps to the chosen axis.
+    const target = controls.target.clone()
+    const distance = camera.position.distanceTo(target)
+    const direction = AXIS_VIEW_DIRECTIONS[axisView]
+
+    frameCamera(
+      camera as PerspectiveCamera | OrthographicCamera,
+      direction,
+      target,
+      distance,
+      perspectiveCamera.fov,
+    )
+    controls.update()
+  }, [axisViewNonce, axisView, camera, orbitControlsRef])
 
   return null
 }

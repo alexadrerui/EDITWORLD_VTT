@@ -130,3 +130,15 @@ export interface SceneMeta {
   id: string
   name: string
 }
+
+// Transform-gizmo axis space, matching three.js's TransformControls.space —
+// 'world' moves/rotates along the world X/Y/Z axes, 'local' along the
+// selected object's own rotated axes. Scale is always local regardless (see
+// three-stdlib's TransformControls: `if (mode === 'scale') space = 'local'`),
+// so this only visibly affects translate/rotate.
+export type GizmoSpace = 'world' | 'local'
+
+// Axis-aligned camera view snap (Interverse Engine's front/back/top/left/
+// right buttons) — preserves the current OrbitControls target/distance,
+// only snaps the viewing direction. See Editor3D.tsx's AXIS_VIEW_DIRECTIONS.
+export type AxisView = 'front' | 'back' | 'top' | 'left' | 'right'

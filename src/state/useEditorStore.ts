@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 import type {
+  AxisView,
+  GizmoSpace,
   GraphicsQuality,
   GridStyle,
   LengthUnit,
@@ -189,6 +191,9 @@ interface EditorState {
   cameraProjection: 'perspective' | 'orthographic'
   focusTargetId: string | null
   focusNonce: number
+  gizmoSpace: GizmoSpace
+  axisView: AxisView | null
+  axisViewNonce: number
   undoStack: HistoryEntry[]
   redoStack: HistoryEntry[]
   addObject: (kind: PrimitiveKind) => void
@@ -214,6 +219,8 @@ interface EditorState {
   setQuality: (quality: GraphicsQuality) => void
   toggleCameraProjection: () => void
   requestCameraFocus: (id: string) => void
+  setGizmoSpace: (space: GizmoSpace) => void
+  requestAxisView: (axis: AxisView) => void
   undo: () => void
   redo: () => void
   saveScene: () => void
@@ -241,6 +248,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   cameraProjection: 'perspective',
   focusTargetId: null,
   focusNonce: 0,
+  gizmoSpace: 'world',
+  axisView: null,
+  axisViewNonce: 0,
   undoStack: [],
   redoStack: [],
 
@@ -376,6 +386,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   // so CameraRig's effect fires again after the user has manually panned away.
   requestCameraFocus: (id) =>
     set((state) => ({ focusTargetId: id, focusNonce: state.focusNonce + 1 })),
+  setGizmoSpace: (space) => set({ gizmoSpace: space }),
+  // `axisViewNonce` always increments, even for the same axis, so re-pressing
+  // "top" after manually orbiting away snaps back — same reasoning as
+  // `focusNonce` above.
+  requestAxisView: (axis) =>
+    set((state) => ({ axisView: axis, axisViewNonce: state.axisViewNonce + 1 })),
 
   undo: () =>
     set((state) => {
