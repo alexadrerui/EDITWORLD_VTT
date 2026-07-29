@@ -61,6 +61,16 @@ export type PositionSnapMode = number | null
 // just their intersections (see GridMaterial.ts / GridLine.cross).
 export type GridStyle = 'lines' | 'dots'
 
+// Display unit for the SnapBar's pés/m toggle — visual only for now, not
+// yet wired to convert any displayed numbers (position/scale/dimensions
+// stay in meters everywhere regardless of this value).
+export type LengthUnit = 'm' | 'ft'
+
+// Rendering quality preset (Loftcraft-style). 'low' disables shadows.
+// 'medium'/'high' both keep shadows on — we have no ambient-occlusion or
+// texture pipeline yet to differentiate them further.
+export type GraphicsQuality = 'low' | 'medium' | 'high'
+
 export interface SceneMeta {
   id: string
   name: string

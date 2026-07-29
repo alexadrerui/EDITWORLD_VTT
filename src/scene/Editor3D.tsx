@@ -27,10 +27,11 @@ export function Editor3D() {
   const orbitControlsRef = useRef(null)
   const select = useEditorStore((s) => s.select)
   const sceneSettings = useEditorStore((s) => s.sceneSettings)
+  const quality = useEditorStore((s) => s.quality)
 
   return (
     <Canvas
-      shadows
+      shadows={quality !== 'low'}
       camera={{ position: [10, 10, 10], fov: 50 }}
       onPointerMissed={() => select(null)}
       gl={
@@ -44,7 +45,10 @@ export function Editor3D() {
             // `@types/three`'s WebGPU canvas type and lib.dom's OffscreenCanvas
             // don't structurally match; both are the same object at runtime.
             canvas: canvas as HTMLCanvasElement,
-            powerPreference: 'high-performance',
+            // No powerPreference: Chrome logs "powerPreference option is
+            // currently ignored when calling requestAdapter() on Windows"
+            // (crbug.com/369219127) whenever this is set, and it has no
+            // effect there anyway.
             antialias: true,
             forceWebGL: false,
           })

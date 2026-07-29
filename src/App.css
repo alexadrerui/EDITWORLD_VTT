@@ -172,6 +172,31 @@
   background: #33373f;
 }
 
+.snap-bar-unit-group {
+  display: flex;
+  gap: 2px;
+}
+
+.snap-bar-unit-group button {
+  background: transparent;
+  color: #8a8f98;
+  border: none;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.snap-bar-unit-group button:hover {
+  background: #2c3038;
+}
+
+.snap-bar-unit-group button.active {
+  background: #2c3038;
+  color: #e4e6eb;
+}
+
 .snap-bar > button {
   display: inline-flex;
   align-items: center;
@@ -219,6 +244,30 @@
   min-width: 120px;
   left: 50%;
   transform: translateX(-50%);
+}
+
+.dropdown-menu--descriptive {
+  min-width: 190px;
+}
+
+.dropdown-menu--descriptive button {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 6px 10px;
+}
+
+.dropdown-option-label {
+  font-size: 13px;
+}
+
+.dropdown-option-description {
+  font-size: 11px;
+  color: #8a8f98;
+}
+
+.dropdown-menu--descriptive button.active .dropdown-option-label {
+  color: #3a6df0;
 }
 
 .objects-header {

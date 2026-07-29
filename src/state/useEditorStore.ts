@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import type {
+  GraphicsQuality,
   GridStyle,
+  LengthUnit,
   PositionSnapMode,
   PrimitiveKind,
   SceneGroup,
@@ -160,6 +162,8 @@ interface EditorState {
   rotationSnap: number | null
   gridVisible: boolean
   gridStyle: GridStyle
+  unit: LengthUnit
+  quality: GraphicsQuality
   undoStack: HistoryEntry[]
   redoStack: HistoryEntry[]
   addObject: (kind: PrimitiveKind) => void
@@ -180,6 +184,8 @@ interface EditorState {
   setRotationSnap: (value: number | null) => void
   toggleGridVisible: () => void
   setGridStyle: (style: GridStyle) => void
+  setUnit: (unit: LengthUnit) => void
+  setQuality: (quality: GraphicsQuality) => void
   undo: () => void
   redo: () => void
   saveScene: () => void
@@ -201,6 +207,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   rotationSnap: null,
   gridVisible: true,
   gridStyle: 'lines',
+  unit: 'm',
+  quality: 'medium',
   undoStack: [],
   redoStack: [],
 
@@ -324,6 +332,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setRotationSnap: (value) => set({ rotationSnap: value }),
   toggleGridVisible: () => set((state) => ({ gridVisible: !state.gridVisible })),
   setGridStyle: (style) => set({ gridStyle: style }),
+  setUnit: (unit) => set({ unit }),
+  setQuality: (quality) => set({ quality }),
 
   undo: () =>
     set((state) => {
