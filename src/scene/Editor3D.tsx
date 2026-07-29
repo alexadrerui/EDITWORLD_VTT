@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, type RefObject } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
-import { Color, NeutralToneMapping } from 'three'
+import { Color, NeutralToneMapping, OrthographicCamera, PerspectiveCamera, Vector3 } from 'three'
 import { emissive, mrt, output, pass, vec4 } from 'three/tsl'
 import { bloom } from 'three/addons/tsl/display/BloomNode.js'
 import { BlendMode, NormalBlending, RenderPipeline, UnsignedByteType, WebGPURenderer } from 'three/webgpu'
@@ -113,6 +113,165 @@ function ToneMappingExposure({ exposure }: { exposure: number }) {
   return null
 }
 
+// World-space height (at zoom 1) of the orthographic frustum — same order of
+// magnitude as the perspective camera's default framing from [10,10,10].
+const ORTHO_FRUSTUM_SIZE = 20
+const WORLD_UP = new Vector3(0, 1, 0)
+const GIMBAL_SAFE_UP = new Vector3(0, 0, 1)
+
+// Repositions `camera` along `direction` at `distance` from `target`, and (for
+// an orthographic camera) sets `zoom` so the same vertical extent stays
+// visible as a perspective camera with `perspectiveFovDeg` would show at that
+// distance — shared by the projection toggle and "focus on selection" below.
+function frameCamera(
+  camera: PerspectiveCamera | OrthographicCamera,
+  direction: Vector3,
+  target: Vector3,
+  distance: number,
+  perspectiveFovDeg: number,
+) {
+  // Guard against gimbal lock in lookAt() when the view direction is nearly
+  // parallel to the default up vector (looking straight down/up) — same
+  // safeUp() idea as kokraf's ControlsManager.js (see editworld-vtt skill
+  // notes): three.js's lookAt() degenerates in that case.
+  camera.up.copy(Math.abs(direction.dot(WORLD_UP)) > 0.999 ? GIMBAL_SAFE_UP : WORLD_UP)
+  camera.position.copy(target).addScaledVector(direction, distance)
+  camera.lookAt(target)
+
+  if (camera instanceof OrthographicCamera) {
+    const vFov = (perspectiveFovDeg * Math.PI) / 180
+    const visibleHeight = 2 * Math.tan(vFov / 2) * distance
+    camera.zoom = ORTHO_FRUSTUM_SIZE / visibleHeight
+  } else {
+    camera.zoom = 1
+  }
+  camera.updateProjectionMatrix()
+}
+
+// Drives two things via the store (both set from plain DOM UI outside the
+// Canvas — SnapBar.tsx/Inspector.tsx — same store-flag bridge already used by
+// gridVisible/lightGizmosVisible):
+//   - `cameraProjection`: toggles perspective <-> orthographic, preserving
+//     the current viewing angle (kokraf-style, not a fixed top-down snap).
+//   - `focusNonce`/`focusTargetId`: "frame selection", Spline's "Centralizar
+//     no objeto"/kokraf's focusObjects(), reusing the same frameCamera() math.
+function CameraRig({ orbitControlsRef }: { orbitControlsRef: RefObject<any> }) {
+  const cameraProjection = useEditorStore((s) => s.cameraProjection)
+  const focusNonce = useEditorStore((s) => s.focusNonce)
+  const focusTargetId = useEditorStore((s) => s.focusTargetId)
+  const objects = useEditorStore((s) => s.objects)
+
+  const camera = useThree((s) => s.camera)
+  const setDefaultCamera = useThree((s) => s.set)
+  const size = useThree((s) => s.size)
+
+  // The perspective camera is the one `<Canvas camera={{...}}>` already
+  // created — captured once here (projection starts as 'perspective') rather
+  // than constructing a second instance, so there's no pop on load.
+  const perspectiveCameraRef = useRef<PerspectiveCamera | null>(null)
+  if (!perspectiveCameraRef.current && camera instanceof PerspectiveCamera) {
+    perspectiveCameraRef.current = camera
+  }
+  const orthoCameraRef = useRef<OrthographicCamera | null>(null)
+  if (!orthoCameraRef.current) {
+    const aspect = size.width / size.height
+    orthoCameraRef.current = new OrthographicCamera(
+      (-ORTHO_FRUSTUM_SIZE * aspect) / 2,
+      (ORTHO_FRUSTUM_SIZE * aspect) / 2,
+      ORTHO_FRUSTUM_SIZE / 2,
+      -ORTHO_FRUSTUM_SIZE / 2,
+      0.1,
+      1000,
+    )
+  }
+
+  // Keep the ortho frustum's aspect synced to canvas resizes (the perspective
+  // camera's `aspect` is already handled by R3F itself).
+  useEffect(() => {
+    const cam = orthoCameraRef.current
+    if (!cam) return
+    const aspect = size.width / size.height
+    cam.left = (-ORTHO_FRUSTUM_SIZE * aspect) / 2
+    cam.right = (ORTHO_FRUSTUM_SIZE * aspect) / 2
+    cam.top = ORTHO_FRUSTUM_SIZE / 2
+    cam.bottom = -ORTHO_FRUSTUM_SIZE / 2
+    cam.updateProjectionMatrix()
+  }, [size])
+
+  // Restoring OrbitControls' target after a camera swap has to happen in a
+  // *separate* effect: drei's <OrbitControls> recreates its internal
+  // three-stdlib instance whenever the default camera reference changes
+  // (node_modules/@react-three/drei/core/OrbitControls.js:
+  // `useMemo(() => new OrbitControls$1(explCamera), [explCamera])`), and that
+  // new instance always starts with target (0,0,0). By the time this effect's
+  // dependency (`camera`) has actually changed, React has already committed
+  // the new OrbitControls, so `orbitControlsRef.current` already points at it
+  // (refs are applied during commit, before any effects run).
+  const pendingTargetRef = useRef<Vector3 | null>(null)
+  useEffect(() => {
+    if (!pendingTargetRef.current) return
+    const controls = orbitControlsRef.current
+    if (!controls) return
+    controls.target.copy(pendingTargetRef.current)
+    controls.update()
+    pendingTargetRef.current = null
+  }, [camera, orbitControlsRef])
+
+  const prevProjectionRef = useRef(cameraProjection)
+  useEffect(() => {
+    if (prevProjectionRef.current === cameraProjection) return
+    prevProjectionRef.current = cameraProjection
+    const controls = orbitControlsRef.current
+    const perspectiveCamera = perspectiveCameraRef.current
+    const orthoCamera = orthoCameraRef.current
+    if (!controls || !perspectiveCamera || !orthoCamera) return
+
+    const fromCam = camera
+    const toCam = cameraProjection === 'orthographic' ? orthoCamera : perspectiveCamera
+    const target = controls.target.clone()
+    const distance = fromCam.position.distanceTo(target)
+    const direction = fromCam.position.clone().sub(target).normalize()
+
+    frameCamera(toCam, direction, target, distance, perspectiveCamera.fov)
+
+    pendingTargetRef.current = target
+    setDefaultCamera({ camera: toCam })
+  }, [cameraProjection, camera, orbitControlsRef, setDefaultCamera])
+
+  const prevFocusNonceRef = useRef(focusNonce)
+  useEffect(() => {
+    if (prevFocusNonceRef.current === focusNonce) return
+    prevFocusNonceRef.current = focusNonce
+    const controls = orbitControlsRef.current
+    const perspectiveCamera = perspectiveCameraRef.current
+    const object = objects.find((o) => o.id === focusTargetId)
+    if (!controls || !perspectiveCamera || !object) return
+
+    const [w, h, d] = PRIMITIVE_BASE_SIZE[object.kind]
+    const boundingRadius =
+      0.5 * Math.hypot(w * object.scale[0], h * object.scale[1], d * object.scale[2])
+    const target = new Vector3(...object.position)
+    // Keep the current viewing direction — only re-center and re-distance,
+    // same idea as kokraf's focusObjects()/Spline's "Centralizar no objeto".
+    const direction = camera.position.clone().sub(controls.target).normalize()
+    const vFov = (perspectiveCamera.fov * Math.PI) / 180
+    const FIT_MARGIN = 1.5
+    const distance = Math.max((boundingRadius * FIT_MARGIN) / Math.tan(vFov / 2), 0.5)
+
+    frameCamera(
+      camera as PerspectiveCamera | OrthographicCamera,
+      direction,
+      target,
+      distance,
+      perspectiveCamera.fov,
+    )
+    controls.target.copy(target)
+    controls.update()
+  }, [focusNonce, focusTargetId, objects, camera, orbitControlsRef])
+
+  return null
+}
+
 export function Editor3D() {
   const orbitControlsRef = useRef(null)
   const select = useEditorStore((s) => s.select)
@@ -158,6 +317,7 @@ export function Editor3D() {
     >
       <SceneBackground color={sceneSettings.backgroundColor} />
       <ToneMappingExposure exposure={sceneSettings.toneMappingExposure} />
+      <CameraRig orbitControlsRef={orbitControlsRef} />
       <BloomPipeline />
       <ambientLight intensity={sceneSettings.ambientIntensity} />
       <directionalLight

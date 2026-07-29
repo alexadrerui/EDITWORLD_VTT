@@ -186,6 +186,9 @@ interface EditorState {
   lightGizmosVisible: boolean
   unit: LengthUnit
   quality: GraphicsQuality
+  cameraProjection: 'perspective' | 'orthographic'
+  focusTargetId: string | null
+  focusNonce: number
   undoStack: HistoryEntry[]
   redoStack: HistoryEntry[]
   addObject: (kind: PrimitiveKind) => void
@@ -209,6 +212,8 @@ interface EditorState {
   toggleLightGizmosVisible: () => void
   setUnit: (unit: LengthUnit) => void
   setQuality: (quality: GraphicsQuality) => void
+  toggleCameraProjection: () => void
+  requestCameraFocus: (id: string) => void
   undo: () => void
   redo: () => void
   saveScene: () => void
@@ -233,6 +238,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   lightGizmosVisible: true,
   unit: 'm',
   quality: 'medium',
+  cameraProjection: 'perspective',
+  focusTargetId: null,
+  focusNonce: 0,
   undoStack: [],
   redoStack: [],
 
@@ -360,6 +368,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setGridStyle: (style) => set({ gridStyle: style }),
   setUnit: (unit) => set({ unit }),
   setQuality: (quality) => set({ quality }),
+  toggleCameraProjection: () =>
+    set((state) => ({
+      cameraProjection: state.cameraProjection === 'perspective' ? 'orthographic' : 'perspective',
+    })),
+  // `focusNonce` always increments, even when re-focusing the same object,
+  // so CameraRig's effect fires again after the user has manually panned away.
+  requestCameraFocus: (id) =>
+    set((state) => ({ focusTargetId: id, focusNonce: state.focusNonce + 1 })),
 
   undo: () =>
     set((state) => {

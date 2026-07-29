@@ -1,5 +1,15 @@
 import { useEffect, useState } from 'react'
-import { ChevronDown, Link2, Magnet, RotateCw, Scale3D, Scaling, Trash2, Unlink2 } from 'lucide-react'
+import {
+  ChevronDown,
+  Focus,
+  Link2,
+  Magnet,
+  RotateCw,
+  Scale3D,
+  Scaling,
+  Trash2,
+  Unlink2,
+} from 'lucide-react'
 import { useEditorStore } from '../state/useEditorStore'
 import { isLightKind, PRIMITIVE_BASE_SIZE, PRIMITIVE_LABEL } from '../scene/primitives'
 import { SceneInspector } from './SceneInspector'
@@ -414,15 +424,18 @@ export function Inspector() {
   const removeObject = useEditorStore((s) => s.removeObject)
   const transformMode = useEditorStore((s) => s.transformMode)
   const setTransformMode = useEditorStore((s) => s.setTransformMode)
+  const requestCameraFocus = useEditorStore((s) => s.requestCameraFocus)
   const object = objects.find((o) => o.id === selectedId)
 
   // Local, not persisted per-object — a workflow toggle (like Spline's), not
   // content about the object itself.
   const [scaleLocked, setScaleLocked] = useState(false)
 
-  // Keyboard shortcuts (R/S/F/Del), like the hints shown next to each action
-  // below — ignored while typing in a field so they don't hijack normal text
-  // entry, and while nothing is selected.
+  // Keyboard shortcuts (R/S/F/Del/.), like the hints shown next to each
+  // action below — ignored while typing in a field so they don't hijack
+  // normal text entry, and while nothing is selected. `.` (not `S`, Blender's
+  // "Frame Selected" convention) because S/F are already taken by Escalar/
+  // Escala livre above.
   useEffect(() => {
     if (!object) return
     const onKeyDown = (e: KeyboardEvent) => {
@@ -450,6 +463,9 @@ export function Inspector() {
         case 'backspace':
           removeObject(object.id)
           break
+        case '.':
+          requestCameraFocus(object.id)
+          break
         default:
           return
       }
@@ -457,7 +473,7 @@ export function Inspector() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [object, transformMode, setTransformMode, removeObject])
+  }, [object, transformMode, setTransformMode, removeObject, requestCameraFocus])
 
   if (!object) return <SceneInspector />
   if (isLightKind(object.kind)) return <LightInspector object={object} />
@@ -531,6 +547,13 @@ export function Inspector() {
             {transformMode === 'rotate' ? 'Desativar' : 'Ativar'} rotacionar
           </span>
           <span className="action-shortcut">R</span>
+        </button>
+        <button onClick={() => requestCameraFocus(object.id)}>
+          <span className="action-label">
+            <Focus size={14} />
+            Centralizar câmera
+          </span>
+          <span className="action-shortcut">.</span>
         </button>
         <button
           className={`snap-toggle ${object.snapToObjects ? 'active' : ''}`}

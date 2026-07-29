@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Compass, Grid3x3, LayoutGrid, Lightbulb, Sparkles } from 'lucide-react'
+import { Axis3d, Compass, Grid3x3, LayoutGrid, Lightbulb, Sparkles } from 'lucide-react'
 import type { GraphicsQuality, PositionSnapMode } from '../types'
 import { useEditorStore } from '../state/useEditorStore'
 import { useDropdown } from './useDropdown'
@@ -115,6 +115,8 @@ export function SnapBar() {
   const setUnit = useEditorStore((s) => s.setUnit)
   const quality = useEditorStore((s) => s.quality)
   const setQuality = useEditorStore((s) => s.setQuality)
+  const cameraProjection = useEditorStore((s) => s.cameraProjection)
+  const toggleCameraProjection = useEditorStore((s) => s.toggleCameraProjection)
 
   return (
     <div className="snap-bar">
@@ -140,6 +142,15 @@ export function SnapBar() {
         title={lightGizmosVisible ? 'Esconder ícones de luz' : 'Mostrar ícones de luz'}
       >
         <Lightbulb size={14} />
+      </button>
+      <button
+        className={cameraProjection === 'orthographic' ? 'active' : ''}
+        onClick={() => toggleCameraProjection()}
+        title={
+          cameraProjection === 'orthographic' ? 'Voltar à perspectiva' : 'Ativar vista ortográfica'
+        }
+      >
+        <Axis3d size={14} />
       </button>
       <div className="snap-bar-divider" />
       <SnapMenu
