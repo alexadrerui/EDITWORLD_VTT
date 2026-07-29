@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type {
+  GridStyle,
   PositionSnapMode,
   PrimitiveKind,
   SceneGroup,
@@ -157,6 +158,8 @@ interface EditorState {
   isDirty: boolean
   positionSnap: PositionSnapMode
   rotationSnap: number | null
+  gridVisible: boolean
+  gridStyle: GridStyle
   undoStack: HistoryEntry[]
   redoStack: HistoryEntry[]
   addObject: (kind: PrimitiveKind) => void
@@ -175,6 +178,8 @@ interface EditorState {
   setTransformMode: (mode: TransformMode) => void
   setPositionSnap: (value: PositionSnapMode) => void
   setRotationSnap: (value: number | null) => void
+  toggleGridVisible: () => void
+  setGridStyle: (style: GridStyle) => void
   undo: () => void
   redo: () => void
   saveScene: () => void
@@ -192,8 +197,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   selectedId: null,
   transformMode: 'translate',
   isDirty: false,
-  positionSnap: 1,
-  rotationSnap: 15,
+  positionSnap: null,
+  rotationSnap: null,
+  gridVisible: true,
+  gridStyle: 'lines',
   undoStack: [],
   redoStack: [],
 
@@ -315,6 +322,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setTransformMode: (mode) => set({ transformMode: mode }),
   setPositionSnap: (value) => set({ positionSnap: value }),
   setRotationSnap: (value) => set({ rotationSnap: value }),
+  toggleGridVisible: () => set((state) => ({ gridVisible: !state.gridVisible })),
+  setGridStyle: (style) => set({ gridStyle: style }),
 
   undo: () =>
     set((state) => {

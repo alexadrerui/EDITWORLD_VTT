@@ -57,6 +57,10 @@ export type TransformMode = 'translate' | 'rotate' | 'scale' | 'scaleFree'
 
 export type PositionSnapMode = number | null
 
+// Ground grid rendering style — 'dots' restricts the grid lines down to
+// just their intersections (see GridMaterial.ts / GridLine.cross).
+export type GridStyle = 'lines' | 'dots'
+
 export interface SceneMeta {
   id: string
   name: string

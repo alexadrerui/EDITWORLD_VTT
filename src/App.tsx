@@ -3,6 +3,7 @@ import { Editor3D } from './scene/Editor3D'
 import { Toolbar } from './ui/Toolbar'
 import { Hierarchy } from './ui/Hierarchy'
 import { Inspector } from './ui/Inspector'
+import { SnapBar } from './ui/SnapBar'
 
 function App() {
   return (
@@ -13,6 +14,7 @@ function App() {
           <Editor3D />
           <Hierarchy />
           <Inspector />
+          <SnapBar />
         </div>
       </div>
     </div>

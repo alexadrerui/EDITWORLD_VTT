@@ -81,6 +81,11 @@
   right: 0;
 }
 
+.dropdown-menu--up {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+
 .dropdown-menu button {
   display: flex;
   align-items: center;
@@ -140,6 +145,80 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: #8a8f98;
+}
+
+/* Bottom floating pill bar for global snap settings (Loftcraft-style) —
+   centered under the viewport, dropdowns open upward since it sits at the
+   bottom edge. */
+.snap-bar {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(26, 29, 34, 0.92);
+  backdrop-filter: blur(6px);
+  border: 1px solid #33373f;
+  border-radius: 999px;
+  padding: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.snap-bar-divider {
+  width: 1px;
+  height: 18px;
+  background: #33373f;
+}
+
+.snap-bar > button {
+  display: inline-flex;
+  align-items: center;
+  background: transparent;
+  color: #8a8f98;
+  border: none;
+  border-radius: 999px;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.snap-bar > button:hover {
+  background: #2c3038;
+}
+
+.snap-bar > button.active {
+  color: #3a6df0;
+}
+
+.snap-bar .dropdown button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  color: #e4e6eb;
+  border: none;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.snap-bar .dropdown button svg {
+  flex-shrink: 0;
+  color: #8a8f98;
+}
+
+.snap-bar .dropdown button:hover {
+  background: #2c3038;
+}
+
+.snap-bar .dropdown-menu {
+  min-width: 120px;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 .objects-header {

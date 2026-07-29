@@ -62,7 +62,7 @@ function Vector3Row({
   )
 }
 
-function SegmentedControl<T extends string>({
+export function SegmentedControl<T extends string>({
   options,
   value,
   onChange,

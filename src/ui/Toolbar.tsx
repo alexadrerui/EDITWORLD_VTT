@@ -1,6 +1,6 @@
-import { useEffect, type ReactNode } from 'react'
-import { Compass, Grid3x3, Plus, Redo2, Undo2 } from 'lucide-react'
-import type { PositionSnapMode, PrimitiveKind } from '../types'
+import { useEffect } from 'react'
+import { Plus, Redo2, Undo2 } from 'lucide-react'
+import type { PrimitiveKind } from '../types'
 import { useEditorStore } from '../state/useEditorStore'
 import { useDropdown } from './useDropdown'
 
@@ -11,56 +11,6 @@ const PRIMITIVES: { kind: PrimitiveKind; label: string }[] = [
   { kind: 'cone', label: 'Cone' },
   { kind: 'plane', label: 'Placa' },
 ]
-
-const POSITION_SNAP_OPTIONS: PositionSnapMode[] = [null, 0.25, 0.5, 1, 2]
-const ROTATION_SNAP_OPTIONS: (number | null)[] = [null, 5, 15, 45, 90]
-
-function formatSnapLabel(value: number | null, unit: string) {
-  return value === null ? 'Desligado' : `${value}${unit}`
-}
-
-function SnapMenu<T extends number | null>({
-  label,
-  icon,
-  value,
-  options,
-  unit,
-  onChange,
-}: {
-  label: string
-  icon: ReactNode
-  value: T
-  options: T[]
-  unit: string
-  onChange: (value: T) => void
-}) {
-  const { open, setOpen, rootRef } = useDropdown<HTMLDivElement>()
-
-  return (
-    <div className="dropdown" ref={rootRef}>
-      <button onClick={() => setOpen((v) => !v)}>
-        {icon}
-        {label}: {formatSnapLabel(value, unit)}
-      </button>
-      {open && (
-        <div className="dropdown-menu">
-          {options.map((option) => (
-            <button
-              key={option ?? 'off'}
-              className={option === value ? 'active' : ''}
-              onClick={() => {
-                onChange(option)
-                setOpen(false)
-              }}
-            >
-              {formatSnapLabel(option, unit)}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
 
 function HistoryButtons() {
   const canUndo = useEditorStore((s) => s.undoStack.length > 0)
@@ -124,11 +74,6 @@ function AddObjectMenu() {
 }
 
 export function Toolbar() {
-  const positionSnap = useEditorStore((s) => s.positionSnap)
-  const setPositionSnap = useEditorStore((s) => s.setPositionSnap)
-  const rotationSnap = useEditorStore((s) => s.rotationSnap)
-  const setRotationSnap = useEditorStore((s) => s.setRotationSnap)
-
   return (
     <div className="toolbar">
       <div className="toolbar-group">
@@ -136,25 +81,6 @@ export function Toolbar() {
       </div>
 
       <HistoryButtons />
-
-      <div className="toolbar-group">
-        <SnapMenu
-          label="Grade"
-          icon={<Grid3x3 size={14} />}
-          value={positionSnap}
-          options={POSITION_SNAP_OPTIONS}
-          unit="m"
-          onChange={setPositionSnap}
-        />
-        <SnapMenu
-          label="Ângulo"
-          icon={<Compass size={14} />}
-          value={rotationSnap}
-          options={ROTATION_SNAP_OPTIONS}
-          unit="°"
-          onChange={setRotationSnap}
-        />
-      </div>
     </div>
   )
 }

@@ -1,4 +1,11 @@
 import { useEditorStore } from '../state/useEditorStore'
+import { SegmentedControl } from './Inspector'
+import type { GridStyle } from '../types'
+
+const GRID_STYLE_OPTIONS: { value: GridStyle; label: string }[] = [
+  { value: 'lines', label: 'Linhas' },
+  { value: 'dots', label: 'Pontos' },
+]
 
 export function SceneInspector() {
   const scenesIndex = useEditorStore((s) => s.scenesIndex)
@@ -6,6 +13,8 @@ export function SceneInspector() {
   const sceneSettings = useEditorStore((s) => s.sceneSettings)
   const updateSceneSettings = useEditorStore((s) => s.updateSceneSettings)
   const currentScene = scenesIndex.find((s) => s.id === currentSceneId)
+  const gridStyle = useEditorStore((s) => s.gridStyle)
+  const setGridStyle = useEditorStore((s) => s.setGridStyle)
 
   return (
     <div className="floating-panel selection-panel">
@@ -46,6 +55,10 @@ export function SceneInspector() {
               updateSceneSettings({ directionalIntensity: Math.max(0, Number(e.target.value)) })
             }
           />
+        </div>
+        <div className="field-row">
+          <span className="field-label">Modelo de grade</span>
+          <SegmentedControl options={GRID_STYLE_OPTIONS} value={gridStyle} onChange={setGridStyle} />
         </div>
       </div>
     </div>
