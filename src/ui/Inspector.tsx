@@ -591,6 +591,25 @@ export function Inspector() {
             onChange={(materialType) => updateObject(object.id, { materialType })}
           />
         </div>
+        <div className="field-row">
+          <span className="field-label">Cor emissiva</span>
+          <input
+            type="color"
+            value={object.emissiveColor}
+            onChange={(e) => updateObject(object.id, { emissiveColor: e.target.value })}
+          />
+        </div>
+        <div className="field-row">
+          <span className="field-label">Intensidade</span>
+          <SliderField
+            max={5}
+            step={0.1}
+            value={object.emissiveIntensity}
+            onChange={(emissiveIntensity) =>
+              updateObject(object.id, { emissiveIntensity: Math.max(0, emissiveIntensity) })
+            }
+          />
+        </div>
       </div>
 
       <div className="field-section-label">Visibilidade</div>

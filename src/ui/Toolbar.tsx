@@ -10,6 +10,11 @@ const PRIMITIVES: { kind: PrimitiveKind; label: string }[] = [
   { kind: 'cylinder', label: 'Cilindro' },
   { kind: 'cone', label: 'Cone' },
   { kind: 'plane', label: 'Placa' },
+  { kind: 'torus', label: 'Torus' },
+  { kind: 'pyramid', label: 'Pirâmide' },
+  { kind: 'icosahedron', label: 'Icosaedro' },
+  { kind: 'dodecahedron', label: 'Dodecaedro' },
+  { kind: 'torusKnot', label: 'Nó de torus' },
 ]
 
 const LIGHTS: { kind: LightKind; label: string }[] = [
@@ -114,6 +119,8 @@ export function Toolbar() {
         <AddObjectMenu />
         <AddLightMenu />
       </div>
+
+      <div className="toolbar-divider" />
 
       <HistoryButtons />
     </div>

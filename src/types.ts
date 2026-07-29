@@ -1,4 +1,14 @@
-export type MeshKind = 'box' | 'sphere' | 'cylinder' | 'plane' | 'cone'
+export type MeshKind =
+  | 'box'
+  | 'sphere'
+  | 'cylinder'
+  | 'plane'
+  | 'cone'
+  | 'torus'
+  | 'pyramid'
+  | 'icosahedron'
+  | 'dodecahedron'
+  | 'torusKnot'
 
 // Light objects share the same SceneObject/objects[] array as meshes (see
 // SceneObject below) so grouping, undo/redo, persistence, drag-and-drop and
@@ -45,6 +55,13 @@ export interface SceneObject {
   side: MaterialSide
   shadowMode: ShadowMode
   materialType: MaterialType
+  // Selective bloom (see BloomPipeline in Editor3D.tsx): only objects with
+  // emissiveIntensity > 0 glow — the rest of the scene is untouched, unlike
+  // a scene-wide brightness-threshold bloom. Black/0 by default (no glow).
+  // Overridden by the selection highlight tint while selected (see
+  // SceneObjectMesh.tsx's Material component).
+  emissiveColor: string
+  emissiveIntensity: number
   // Light-only fields (kind is a LightKind) — unused/ignored for meshes,
   // same convention as wireframe/flatShading being unused for planes etc.
   // `color` above doubles as the light's color.

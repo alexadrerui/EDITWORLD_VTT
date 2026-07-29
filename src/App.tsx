@@ -8,10 +8,10 @@ import { SnapBar } from './ui/SnapBar'
 function App() {
   return (
     <div className="editor-layout">
-      <Toolbar />
       <div className="editor-body">
         <div className="viewport">
           <Editor3D />
+          <Toolbar />
           <Hierarchy />
           <Inspector />
           <SnapBar />

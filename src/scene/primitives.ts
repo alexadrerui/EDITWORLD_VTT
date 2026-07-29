@@ -14,6 +14,19 @@ export const PRIMITIVE_BASE_SIZE: Record<PrimitiveKind, [number, number, number]
   cylinder: [1, 1, 1],
   cone: [1.2, 1, 1.2],
   plane: [2, 0.05, 2],
+  // Outer diameter 2*(radius+tube) = 1, height = 2*tube = 0.3 — matches the
+  // TorusGeometry args in SceneObjectMesh.tsx's Geometry component.
+  torus: [1, 0.3, 1],
+  // Same shape as `cone` (ConeGeometry), just 4 radial segments instead of 32.
+  pyramid: [1.2, 1, 1.2],
+  // Circumscribed-sphere radius 0.65 approximates the bounding box closely
+  // enough for these fairly round polyhedra (same tolerance already accepted
+  // for `sphere`/`cone` above — SelectionOutline only ever draws a box).
+  icosahedron: [1.3, 1.3, 1.3],
+  dodecahedron: [1.3, 1.3, 1.3],
+  // TorusKnotGeometry's default winding extends further than radius+tube —
+  // approximated, same tolerance as the other round shapes above.
+  torusKnot: [1.6, 1.2, 1.6],
   pointLight: [0.4, 0.4, 0.4],
   spotLight: [0.4, 0.4, 0.4],
   directionalLight: [0.4, 0.4, 0.4],
@@ -25,6 +38,11 @@ export const PRIMITIVE_LABEL: Record<PrimitiveKind, string> = {
   cylinder: 'Cilindro',
   cone: 'Cone',
   plane: 'Placa',
+  torus: 'Torus',
+  pyramid: 'Pirâmide',
+  icosahedron: 'Icosaedro',
+  dodecahedron: 'Dodecaedro',
+  torusKnot: 'Nó de torus',
   pointLight: 'Luz de ponto',
   spotLight: 'Luz spot',
   directionalLight: 'Luz direcional',

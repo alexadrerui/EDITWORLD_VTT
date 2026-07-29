@@ -1,8 +1,9 @@
-import { forwardRef, useEffect, useRef, type RefObject } from 'react'
+import { forwardRef, useEffect, useMemo, useRef, type RefObject } from 'react'
 import type { ThreeEvent } from '@react-three/fiber'
 import {
   BackSide,
   BufferGeometry,
+  Color,
   type DirectionalLight,
   DoubleSide,
   Float32BufferAttribute,
@@ -50,11 +51,22 @@ function Material({
   isSelected: boolean
   materialRef: RefObject<AnyMeshMaterial | null>
 }) {
+  // The selection highlight used to tint the *emissive* channel — but that's
+  // the exact channel BloomPipeline (Editor3D.tsx) reads for selective bloom,
+  // so every selected object visibly bloomed regardless of its own glow
+  // settings. Fixed by tinting the diffuse `color` instead: emissive always
+  // reflects the object's own emissiveColor/emissiveIntensity, selected or
+  // not, so bloom only ever comes from deliberate glow, never from selection.
+  const displayColor = useMemo(() => {
+    if (!isSelected) return object.color
+    return new Color(object.color).lerp(new Color('#3a6df0'), 0.5).getStyle()
+  }, [object.color, isSelected])
+
   const commonProps = {
     ref: materialRef as never,
-    color: object.color,
-    emissive: isSelected ? '#3a6df0' : '#000000',
-    emissiveIntensity: isSelected ? 0.35 : 0,
+    color: displayColor,
+    emissive: object.emissiveColor,
+    emissiveIntensity: object.emissiveIntensity,
     wireframe: object.wireframe,
     flatShading: object.flatShading,
     side: MATERIAL_SIDE[object.side],
@@ -93,6 +105,17 @@ function Geometry({ kind }: { kind: SceneObject['kind'] }) {
       return <coneGeometry args={[w / 2, h, 32]} />
     case 'plane':
       return <boxGeometry args={[w, h, d]} />
+    case 'torus':
+      return <torusGeometry args={[0.35, 0.15, 16, 48]} />
+    case 'pyramid':
+      // Same as `cone` above, just 4 radial segments instead of 32.
+      return <coneGeometry args={[0.6, 1, 4]} />
+    case 'icosahedron':
+      return <icosahedronGeometry args={[0.65, 0]} />
+    case 'dodecahedron':
+      return <dodecahedronGeometry args={[0.65, 0]} />
+    case 'torusKnot':
+      return <torusKnotGeometry args={[0.4, 0.12, 64, 8]} />
   }
 }
 

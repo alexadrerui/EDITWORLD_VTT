@@ -78,6 +78,8 @@ function loadSceneData(id: string): SceneData {
           side: 'front',
           shadowMode: 'both',
           materialType: 'standard',
+          emissiveColor: '#000000',
+          emissiveIntensity: 0,
           ...LIGHT_DEFAULTS,
           ...o,
         }) as SceneObject,
@@ -149,6 +151,8 @@ function createPrimitive(kind: PrimitiveKind): SceneObject {
     side: 'front',
     shadowMode: 'both',
     materialType: 'standard',
+    emissiveColor: '#000000',
+    emissiveIntensity: 0,
     ...LIGHT_DEFAULTS,
     // Directional lights have no distance falloff, so the shared light
     // intensity default (tuned for point/spot) would be blindingly bright.

@@ -8,33 +8,50 @@
   font-family: system-ui, sans-serif;
 }
 
+/* Top floating pill toolbar (Spline-style) — centered over the viewport,
+   same visual language as .snap-bar/.floating-panel: blurred dark pill,
+   transparent icon/text buttons, dividers between logical groups. */
 .toolbar {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
-  gap: 20px;
   align-items: center;
-  padding: 10px 16px;
-  background: #1a1d22;
-  border-bottom: 1px solid #2a2e35;
-  flex-shrink: 0;
+  gap: 4px;
+  background: rgba(26, 29, 34, 0.92);
+  backdrop-filter: blur(6px);
+  border: 1px solid #33373f;
+  border-radius: 999px;
+  padding: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  z-index: 10;
 }
 
 .toolbar-group {
   display: flex;
-  gap: 6px;
+  gap: 2px;
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 18px;
+  background: #33373f;
+  margin: 0 4px;
 }
 
 .toolbar button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: #23262d;
+  background: transparent;
   color: #e4e6eb;
-  border: 1px solid #33373f;
-  border-radius: 5px;
+  border: none;
+  border-radius: 999px;
   padding: 6px 12px;
   font-size: 13px;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s, color 0.15s;
 }
 
 .toolbar button svg {
@@ -43,12 +60,11 @@
 
 .toolbar button:hover:not(:disabled) {
   background: #2c3038;
-  border-color: #454b56;
 }
 
 .toolbar button.active {
   background: #3a6df0;
-  border-color: #3a6df0;
+  color: #fff;
 }
 
 .toolbar button:disabled {

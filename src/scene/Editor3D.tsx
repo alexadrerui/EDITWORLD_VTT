@@ -1,13 +1,65 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { Canvas, useThree } from '@react-three/fiber'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { Color, NeutralToneMapping } from 'three'
-import { WebGPURenderer } from 'three/webgpu'
+import { emissive, mrt, output, pass, vec4 } from 'three/tsl'
+import { bloom } from 'three/addons/tsl/display/BloomNode.js'
+import { BlendMode, NormalBlending, RenderPipeline, UnsignedByteType, WebGPURenderer } from 'three/webgpu'
 import { Ground } from './Ground'
 import { PRIMITIVE_BASE_SIZE } from './primitives'
 import { SceneObjects } from './SceneObjects'
 import { useEditorStore } from '../state/useEditorStore'
 import type { SceneObject } from '../types'
+
+const BLOOM_STRENGTH = 1.5
+const BLOOM_RADIUS = 0.4
+
+// Selective bloom: only objects with a nonzero `emissiveIntensity` (the "Cor
+// emissiva"/"Intensidade" fields in Inspector.tsx) glow — unlike a scene-wide
+// brightness-threshold bloom, this leaves bright lights/highlights alone.
+// Modeled on three.js's own webgpu_postprocessing_bloom_emissive example:
+// the scene's emissive channel is rendered into a second MRT target, blurred/
+// bloomed on its own, then added back on top of the normal color output.
+//
+// This takes over the render call from R3F's default — a positive
+// `useFrame` priority disables R3F's automatic render for the frame, the
+// same mechanism @react-three/postprocessing uses internally to drive its
+// own EffectComposer.
+function BloomPipeline() {
+  const scene = useThree((s) => s.scene)
+  const camera = useThree((s) => s.camera)
+  const gl = useThree((s) => s.gl)
+
+  const renderPipeline = useMemo(() => {
+    const scenePass = pass(scene, camera)
+
+    const mrtNode = mrt({
+      output,
+      emissive: vec4(emissive, output.a),
+    })
+    mrtNode.setBlendMode('emissive', new BlendMode(NormalBlending))
+    scenePass.setMRT(mrtNode)
+
+    // Bandwidth optimization — the emissive channel doesn't need float precision.
+    scenePass.getTexture('emissive').type = UnsignedByteType
+
+    const colorPass = scenePass.getTextureNode('output')
+    const emissivePass = scenePass.getTextureNode('emissive')
+    const bloomPass = bloom(emissivePass, BLOOM_STRENGTH, BLOOM_RADIUS)
+
+    // `RenderPipeline` only works with WebGPURenderer (see Editor3D.tsx's
+    // renderer factory) — same renderer this project already commits to.
+    const pipeline = new RenderPipeline(gl as unknown as WebGPURenderer)
+    pipeline.outputNode = colorPass.add(bloomPass)
+    return pipeline
+  }, [scene, camera, gl])
+
+  useFrame(() => {
+    renderPipeline.render()
+  }, 1)
+
+  return null
+}
 
 const DEFAULT_SHADOW_RADIUS = 20
 const SHADOW_RADIUS_MARGIN = 1.15
@@ -106,6 +158,7 @@ export function Editor3D() {
     >
       <SceneBackground color={sceneSettings.backgroundColor} />
       <ToneMappingExposure exposure={sceneSettings.toneMappingExposure} />
+      <BloomPipeline />
       <ambientLight intensity={sceneSettings.ambientIntensity} />
       <directionalLight
         position={[10, 15, 5]}
