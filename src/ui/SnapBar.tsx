@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Compass, Grid3x3, LayoutGrid, Sparkles } from 'lucide-react'
+import { Compass, Grid3x3, LayoutGrid, Lightbulb, Sparkles } from 'lucide-react'
 import type { GraphicsQuality, PositionSnapMode } from '../types'
 import { useEditorStore } from '../state/useEditorStore'
 import { useDropdown } from './useDropdown'
@@ -109,6 +109,8 @@ export function SnapBar() {
   const setRotationSnap = useEditorStore((s) => s.setRotationSnap)
   const gridVisible = useEditorStore((s) => s.gridVisible)
   const toggleGridVisible = useEditorStore((s) => s.toggleGridVisible)
+  const lightGizmosVisible = useEditorStore((s) => s.lightGizmosVisible)
+  const toggleLightGizmosVisible = useEditorStore((s) => s.toggleLightGizmosVisible)
   const unit = useEditorStore((s) => s.unit)
   const setUnit = useEditorStore((s) => s.setUnit)
   const quality = useEditorStore((s) => s.quality)
@@ -131,6 +133,13 @@ export function SnapBar() {
         title={gridVisible ? 'Esconder grade' : 'Mostrar grade'}
       >
         <LayoutGrid size={14} />
+      </button>
+      <button
+        className={lightGizmosVisible ? 'active' : ''}
+        onClick={() => toggleLightGizmosVisible()}
+        title={lightGizmosVisible ? 'Esconder ícones de luz' : 'Mostrar ícones de luz'}
+      >
+        <Lightbulb size={14} />
       </button>
       <div className="snap-bar-divider" />
       <SnapMenu

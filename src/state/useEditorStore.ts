@@ -3,6 +3,7 @@ import type {
   GraphicsQuality,
   GridStyle,
   LengthUnit,
+  LightKind,
   PositionSnapMode,
   PrimitiveKind,
   SceneGroup,
@@ -11,11 +12,13 @@ import type {
   SceneSettings,
   TransformMode,
 } from '../types'
+import { DIRECTIONAL_LIGHT_INTENSITY, LIGHT_DEFAULTS, isLightKind } from '../scene/primitives'
 
 const DEFAULT_SCENE_SETTINGS: SceneSettings = {
   backgroundColor: '#14161a',
   ambientIntensity: 1.2,
   directionalIntensity: 3,
+  toneMappingExposure: 1,
 }
 
 const INDEX_KEY = 'editworld-vtt:scenes'
@@ -75,6 +78,7 @@ function loadSceneData(id: string): SceneData {
           side: 'front',
           shadowMode: 'both',
           materialType: 'standard',
+          ...LIGHT_DEFAULTS,
           ...o,
         }) as SceneObject,
     )
@@ -117,16 +121,25 @@ function pushHistory(stack: HistoryEntry[], entry: HistoryEntry): HistoryEntry[]
 let nextObjectId = 1
 let nextGroupId = 1
 
+const LIGHT_NAME: Record<LightKind, string> = {
+  pointLight: 'Luz de ponto',
+  spotLight: 'Luz spot',
+  directionalLight: 'Luz direcional',
+}
+
 function createPrimitive(kind: PrimitiveKind): SceneObject {
   const n = nextObjectId++
+  const light = isLightKind(kind)
   return {
     id: genId('obj'),
-    name: `${kind[0].toUpperCase()}${kind.slice(1)} ${n}`,
+    name: light ? `${LIGHT_NAME[kind]} ${n}` : `${kind[0].toUpperCase()}${kind.slice(1)} ${n}`,
     kind,
-    position: [0, kind === 'plane' ? 0 : 0.5, 0],
+    // Lights spawn floating at head height like a hanging lamp; meshes sit
+    // on the ground (planes flush at y=0, everything else resting at 0.5).
+    position: [0, light ? 3 : kind === 'plane' ? 0 : 0.5, 0],
     rotation: [0, 0, 0],
     scale: [1, 1, 1],
-    color: '#8a8f98',
+    color: light ? '#fff2cc' : '#8a8f98',
     snapToObjects: false,
     locked: false,
     hidden: false,
@@ -136,6 +149,10 @@ function createPrimitive(kind: PrimitiveKind): SceneObject {
     side: 'front',
     shadowMode: 'both',
     materialType: 'standard',
+    ...LIGHT_DEFAULTS,
+    // Directional lights have no distance falloff, so the shared light
+    // intensity default (tuned for point/spot) would be blindingly bright.
+    lightIntensity: kind === 'directionalLight' ? DIRECTIONAL_LIGHT_INTENSITY : LIGHT_DEFAULTS.lightIntensity,
   }
 }
 
@@ -162,6 +179,7 @@ interface EditorState {
   rotationSnap: number | null
   gridVisible: boolean
   gridStyle: GridStyle
+  lightGizmosVisible: boolean
   unit: LengthUnit
   quality: GraphicsQuality
   undoStack: HistoryEntry[]
@@ -184,6 +202,7 @@ interface EditorState {
   setRotationSnap: (value: number | null) => void
   toggleGridVisible: () => void
   setGridStyle: (style: GridStyle) => void
+  toggleLightGizmosVisible: () => void
   setUnit: (unit: LengthUnit) => void
   setQuality: (quality: GraphicsQuality) => void
   undo: () => void
@@ -207,6 +226,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   rotationSnap: null,
   gridVisible: true,
   gridStyle: 'lines',
+  lightGizmosVisible: true,
   unit: 'm',
   quality: 'medium',
   undoStack: [],
@@ -331,6 +351,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setPositionSnap: (value) => set({ positionSnap: value }),
   setRotationSnap: (value) => set({ rotationSnap: value }),
   toggleGridVisible: () => set((state) => ({ gridVisible: !state.gridVisible })),
+  toggleLightGizmosVisible: () =>
+    set((state) => ({ lightGizmosVisible: !state.lightGizmosVisible })),
   setGridStyle: (style) => set({ gridStyle: style }),
   setUnit: (unit) => set({ unit }),
   setQuality: (quality) => set({ quality }),

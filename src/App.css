@@ -708,7 +708,7 @@
 }
 
 .field-label {
-  width: 48px;
+  width: 64px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -832,6 +832,89 @@
   color: #e4e6eb;
   padding: 4px 3px;
   font-size: 11px;
+}
+
+/* Unified value+slider "pill" control, matching Spline's Light inspector
+   (Intensity/Distance/Angle/etc.) — a single bordered container holding a
+   borderless number input (left) and a custom-styled range input (right),
+   read as one merged control instead of two separate fields. */
+.slider-field {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  background: #23262d;
+  border: 1px solid #33373f;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.slider-field-value {
+  width: 42px;
+  flex-shrink: 0;
+  height: 100%;
+  background: transparent;
+  border: none;
+  border-right: 1px solid #33373f;
+  color: #e4e6eb;
+  padding: 4px 5px;
+  font-size: 11px;
+}
+
+.slider-field-value::-webkit-outer-spin-button,
+.slider-field-value::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.slider-field-track {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  margin: 0;
+  padding: 0 8px;
+  background: #2c3038;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.slider-field-track::-webkit-slider-runnable-track {
+  height: 3px;
+  background: #40454e;
+  border-radius: 2px;
+}
+
+.slider-field-track::-moz-range-track {
+  height: 3px;
+  background: #40454e;
+  border-radius: 2px;
+}
+
+.slider-field-track::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 11px;
+  height: 11px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: #9a9fa8;
+  cursor: grab;
+}
+
+.slider-field-track::-moz-range-thumb {
+  width: 11px;
+  height: 11px;
+  border: none;
+  border-radius: 50%;
+  background: #9a9fa8;
+  cursor: grab;
+}
+
+.slider-field-track:active::-webkit-slider-thumb,
+.slider-field-track:active::-moz-range-thumb {
+  cursor: grabbing;
+  background: #c4c8d0;
 }
 
 /* Axis inputs (Position/Rotation/Scale), matching Spline's compact style:

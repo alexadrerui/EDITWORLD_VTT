@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { TransformControls } from '@react-three/drei'
 import type { Mesh } from 'three'
 import { useEditorStore } from '../state/useEditorStore'
+import { isLightKind } from './primitives'
 import { ScaleFaceHandles } from './ScaleFaceHandles'
 import { SceneObjectMesh } from './SceneObjectMesh'
 import { SelectionOutline } from './SelectionOutline'
@@ -74,6 +75,15 @@ export function SceneObjects({ orbitControlsRef }: { orbitControlsRef: React.Ref
     !!selectedObject?.locked ||
     !!groups.find((g) => g.id === selectedObject?.groupId)?.locked
 
+  // Lights have no meaningful "scale" in our data model — fall back to
+  // translate so selecting a light while scale/scaleFree is still the active
+  // mode (carried over from a previously selected mesh) doesn't show a scale
+  // gizmo that would do nothing useful.
+  const effectiveTransformMode =
+    selectedObject && isLightKind(selectedObject.kind) && transformMode !== 'rotate'
+      ? 'translate'
+      : transformMode
+
   return (
     <>
       {objects.map((object) => (
@@ -84,7 +94,7 @@ export function SceneObjects({ orbitControlsRef }: { orbitControlsRef: React.Ref
         <SelectionOutline mesh={selectedMesh} object={selectedObject} />
       )}
 
-      {selectedMesh && selectedObject && !selectedLocked && transformMode === 'scale' && (
+      {selectedMesh && selectedObject && !selectedLocked && effectiveTransformMode === 'scale' && (
         <ScaleFaceHandles
           mesh={selectedMesh}
           object={selectedObject}
@@ -93,11 +103,11 @@ export function SceneObjects({ orbitControlsRef }: { orbitControlsRef: React.Ref
         />
       )}
 
-      {selectedMesh && selectedObject && !selectedLocked && transformMode !== 'scale' && (
+      {selectedMesh && selectedObject && !selectedLocked && effectiveTransformMode !== 'scale' && (
         <TransformControls
           ref={controlsRefCallback.current}
           object={selectedMesh}
-          mode={transformMode === 'scaleFree' ? 'scale' : transformMode}
+          mode={effectiveTransformMode === 'scaleFree' ? 'scale' : effectiveTransformMode}
           translationSnap={selectedObject.snapToObjects ? null : positionSnap}
           rotationSnap={rotationSnap !== null ? (rotationSnap * Math.PI) / 180 : null}
           onObjectChange={() => {

@@ -12,11 +12,14 @@ import {
   FolderPlus,
   Group as GroupIcon,
   Home,
+  Lightbulb,
   Lock,
   Plus,
   Save,
   Search,
+  Spotlight,
   Square,
+  Sun,
   Trash2,
   Unlock,
 } from 'lucide-react'
@@ -31,6 +34,9 @@ const KIND_ICON: Record<PrimitiveKind, LucideIcon> = {
   cylinder: Cylinder,
   cone: Cone,
   plane: Square,
+  pointLight: Lightbulb,
+  spotLight: Spotlight,
+  directionalLight: Sun,
 }
 
 function ScenesSection() {

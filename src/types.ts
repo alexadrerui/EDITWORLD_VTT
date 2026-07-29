@@ -1,4 +1,15 @@
-export type PrimitiveKind = 'box' | 'sphere' | 'cylinder' | 'plane' | 'cone'
+export type MeshKind = 'box' | 'sphere' | 'cylinder' | 'plane' | 'cone'
+
+// Light objects share the same SceneObject/objects[] array as meshes (see
+// SceneObject below) so grouping, undo/redo, persistence, drag-and-drop and
+// search all work for them for free — no parallel data structure needed.
+// 'directionalLight' here is a placeable/rotatable secondary light (e.g. a
+// moody rim light or a second sun) — separate from the scene's single
+// always-on ambient+directional pair configured in SceneSettings below,
+// which stays the scene's simple default lighting.
+export type LightKind = 'pointLight' | 'spotLight' | 'directionalLight'
+
+export type PrimitiveKind = MeshKind | LightKind
 
 // Which faces render — mirrors THREE.FrontSide/BackSide/DoubleSide.
 export type MaterialSide = 'front' | 'back' | 'double'
@@ -12,6 +23,10 @@ export type ShadowMode = 'none' | 'cast' | 'receive' | 'both'
 // roughness/metalness) and isn't one of Spline's four options — kept as the
 // default here so existing objects keep rendering exactly as before.
 export type MaterialType = 'standard' | 'lambert' | 'phong' | 'physical' | 'toon'
+
+// Per-light shadow map resolution preset, matching Spline's Light > Shadows >
+// Resolution dropdown (Low/Normal/High) — see PRIMITIVE's SHADOW_MAP_SIZE.
+export type ShadowResolution = 'low' | 'normal' | 'high'
 
 export interface SceneObject {
   id: string
@@ -30,6 +45,23 @@ export interface SceneObject {
   side: MaterialSide
   shadowMode: ShadowMode
   materialType: MaterialType
+  // Light-only fields (kind is a LightKind) — unused/ignored for meshes,
+  // same convention as wireframe/flatShading being unused for planes etc.
+  // `color` above doubles as the light's color.
+  lightIntensity: number
+  lightDistance: number // 0 = no falloff limit (three.js default)
+  lightDecay: number
+  lightAngle: number // spot only, radians (cone half-angle)
+  lightPenumbra: number // spot only, 0-1 soft edge fraction (Spline calls this "Edge Blur")
+  castLightShadow: boolean
+  // Shadow-quality fields, modeled after Spline's Light > Shadows group
+  // (Resolution/Blur/Penumbra/Size) — see SceneObjectMesh.tsx for how
+  // shadowBlur/shadowPenumbra combine into three.js's single `shadow.radius`
+  // (three.js doesn't separate the two the way Spline's inspector does).
+  shadowResolution: ShadowResolution
+  shadowBlur: number
+  shadowPenumbra: number // spot/directional only — unused for point (Spline's Point Light only has "Radius", no separate penumbra)
+  shadowSize: number // directional only — half-extent of the shadow camera frustum
 }
 
 // Visual/organizational grouping only for now — no real 3D parenting yet
@@ -51,6 +83,12 @@ export interface SceneSettings {
   backgroundColor: string
   ambientIntensity: number
   directionalIntensity: number
+  // Renderer exposure multiplier applied on top of tone mapping (see
+  // Editor3D.tsx) — same knob as the "physically-correct" three.js example
+  // this was modeled after, useful once scene lights get bright enough to
+  // blow out highlights (now that lights are placeable objects with
+  // unbounded intensity, see LIGHT_DEFAULTS).
+  toneMappingExposure: number
 }
 
 export type TransformMode = 'translate' | 'rotate' | 'scale' | 'scaleFree'

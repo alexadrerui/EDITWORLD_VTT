@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { ChevronDown, Link2, Magnet, RotateCw, Scale3D, Scaling, Trash2, Unlink2 } from 'lucide-react'
 import { useEditorStore } from '../state/useEditorStore'
-import { PRIMITIVE_BASE_SIZE, PRIMITIVE_LABEL } from '../scene/primitives'
+import { isLightKind, PRIMITIVE_BASE_SIZE, PRIMITIVE_LABEL } from '../scene/primitives'
 import { SceneInspector } from './SceneInspector'
 import { useDropdown } from './useDropdown'
-import type { MaterialSide, MaterialType, ShadowMode } from '../types'
+import type { MaterialSide, MaterialType, SceneObject, ShadowMode, ShadowResolution } from '../types'
 
 function formatMeters(value: number) {
   return `${value.toFixed(2).replace('.', ',')} m`
@@ -86,6 +86,46 @@ export function SegmentedControl<T extends string>({
   )
 }
 
+// Unified value+slider "pill" control, matching Spline's Light inspector
+// (Intensity/Distance/Angle/etc. all use this single merged control instead
+// of a bare number input). `max` is just the slider's drag range — typing
+// directly in the number half still accepts any value beyond it.
+function SliderField({
+  value,
+  min = 0,
+  max,
+  step = 0.1,
+  onChange,
+}: {
+  value: number
+  min?: number
+  max: number
+  step?: number
+  onChange: (value: number) => void
+}) {
+  return (
+    <div className="slider-field">
+      <input
+        type="number"
+        className="slider-field-value"
+        value={value}
+        step={step}
+        min={min}
+        onChange={(e) => onChange(Number(e.target.value))}
+      />
+      <input
+        type="range"
+        className="slider-field-track"
+        value={Math.min(Math.max(value, min), max)}
+        min={min}
+        max={max}
+        step={step}
+        onChange={(e) => onChange(Number(e.target.value))}
+      />
+    </div>
+  )
+}
+
 // Compact dropdown for fields with too many options to fit as inline
 // segmented buttons — matches Spline's Visibility > Shadows control, which
 // shows the current value with a chevron instead of spelling out every
@@ -149,6 +189,224 @@ const SHADOW_OPTIONS: { value: ShadowMode; label: string }[] = [
   { value: 'none', label: 'Nenhuma' },
 ]
 
+// Matches Spline's Light > Shadows > Resolution dropdown (Low/Normal/High).
+const SHADOW_RESOLUTION_OPTIONS: { value: ShadowResolution; label: string }[] = [
+  { value: 'low', label: 'Baixa' },
+  { value: 'normal', label: 'Normal' },
+  { value: 'high', label: 'Alta' },
+]
+
+// Lights share the header/rename/delete chrome with mesh objects but have an
+// entirely different field set (no material/visibility sections, no scale —
+// see SceneObjects.tsx's effectiveTransformMode), so they get their own body
+// instead of branching every section below.
+function LightInspector({ object }: { object: SceneObject }) {
+  const updateObject = useEditorStore((s) => s.updateObject)
+  const removeObject = useEditorStore((s) => s.removeObject)
+  const transformMode = useEditorStore((s) => s.transformMode)
+  const setTransformMode = useEditorStore((s) => s.setTransformMode)
+  const isSpot = object.kind === 'spotLight'
+  const isPoint = object.kind === 'pointLight'
+  const isDirectional = object.kind === 'directionalLight'
+  // Point lights are omnidirectional — rotating them does nothing. Spot and
+  // directional both aim somewhere, so both get the rotate gizmo/field.
+  const hasDirection = !isPoint
+  // Directional lights aren't distance-attenuated — three.js's
+  // DirectionalLight has no distance/decay properties at all.
+  const hasFalloff = !isDirectional
+
+  return (
+    <div className="floating-panel selection-panel">
+      <div className="selection-header">
+        <span className="selection-category">{PRIMITIVE_LABEL[object.kind].toUpperCase()}</span>
+        <input
+          className="selection-name"
+          type="text"
+          value={object.name}
+          onChange={(e) => updateObject(object.id, { name: e.target.value })}
+        />
+      </div>
+
+      <div className="selection-actions">
+        {hasDirection && (
+          <button
+            className={transformMode === 'rotate' ? 'active' : ''}
+            onClick={() => setTransformMode(transformMode === 'rotate' ? 'translate' : 'rotate')}
+          >
+            <span className="action-label">
+              <RotateCw size={14} />
+              {transformMode === 'rotate' ? 'Desativar' : 'Ativar'} rotacionar
+            </span>
+            <span className="action-shortcut">R</span>
+          </button>
+        )}
+        <button className="danger" onClick={() => removeObject(object.id)}>
+          <span className="action-label">
+            <Trash2 size={14} />
+            Excluir luz
+          </span>
+          <span className="action-shortcut">Del</span>
+        </button>
+      </div>
+
+      <div className="field-section-label">Transformar</div>
+      <div className="selection-fields">
+        <Vector3Row
+          label="Posição"
+          value={object.position}
+          onChange={(position) => updateObject(object.id, { position })}
+        />
+        {hasDirection && (
+          <Vector3Row
+            label="Rotação"
+            value={object.rotation}
+            onChange={(rotation) => updateObject(object.id, { rotation })}
+            step={0.05}
+          />
+        )}
+      </div>
+
+      <div className="field-section-label">Luz</div>
+      <div className="selection-fields">
+        <div className="field-row">
+          <span className="field-label">Cor</span>
+          <input
+            type="color"
+            value={object.color}
+            onChange={(e) => updateObject(object.id, { color: e.target.value })}
+          />
+        </div>
+        <div className="field-row">
+          <span className="field-label">Intensidade</span>
+          <SliderField
+            max={50}
+            step={0.5}
+            value={object.lightIntensity}
+            onChange={(lightIntensity) =>
+              updateObject(object.id, { lightIntensity: Math.max(0, lightIntensity) })
+            }
+          />
+        </div>
+        {hasFalloff && (
+          <>
+            <div className="field-row">
+              <span className="field-label">Alcance</span>
+              <SliderField
+                max={50}
+                step={0.5}
+                value={object.lightDistance}
+                onChange={(lightDistance) =>
+                  updateObject(object.id, { lightDistance: Math.max(0, lightDistance) })
+                }
+              />
+            </div>
+            <div className="field-row">
+              <span className="field-label">Decaimento</span>
+              <SliderField
+                max={5}
+                step={0.1}
+                value={object.lightDecay}
+                onChange={(lightDecay) =>
+                  updateObject(object.id, { lightDecay: Math.max(0, lightDecay) })
+                }
+              />
+            </div>
+          </>
+        )}
+        {isSpot && (
+          <>
+            <div className="field-row">
+              <span className="field-label">Ângulo</span>
+              <SliderField
+                min={1}
+                max={90}
+                step={1}
+                value={Math.round((object.lightAngle * 180) / Math.PI)}
+                onChange={(degrees) =>
+                  updateObject(object.id, {
+                    lightAngle: (Math.min(90, Math.max(1, degrees)) * Math.PI) / 180,
+                  })
+                }
+              />
+            </div>
+            <div className="field-row">
+              {/* Spline calls this "Edge Blur" — kept distinct from the
+                  shadow-only "Penumbra" field below, which is a different
+                  concept (see shadowPenumbra in types.ts). */}
+              <span className="field-label">Desfoque da borda</span>
+              <SliderField
+                max={1}
+                step={0.05}
+                value={object.lightPenumbra}
+                onChange={(lightPenumbra) =>
+                  updateObject(object.id, { lightPenumbra: Math.min(1, Math.max(0, lightPenumbra)) })
+                }
+              />
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="field-section-label">Sombra</div>
+      <div className="selection-fields">
+        <div className="field-row">
+          <span className="field-label">Projetar sombra</span>
+          <SegmentedControl
+            options={[
+              { value: 'off', label: 'Não' },
+              { value: 'on', label: 'Sim' },
+            ]}
+            value={object.castLightShadow ? 'on' : 'off'}
+            onChange={(v) => updateObject(object.id, { castLightShadow: v === 'on' })}
+          />
+        </div>
+        <div className="field-row">
+          <span className="field-label">Resolução</span>
+          <FieldDropdown
+            options={SHADOW_RESOLUTION_OPTIONS}
+            value={object.shadowResolution}
+            onChange={(shadowResolution) => updateObject(object.id, { shadowResolution })}
+          />
+        </div>
+        {isDirectional && (
+          <div className="field-row">
+            <span className="field-label">Tamanho</span>
+            <SliderField
+              min={1}
+              max={50}
+              step={1}
+              value={object.shadowSize}
+              onChange={(shadowSize) => updateObject(object.id, { shadowSize: Math.max(1, shadowSize) })}
+            />
+          </div>
+        )}
+        <div className="field-row">
+          <span className="field-label">Desfoque da sombra</span>
+          <SliderField
+            max={10}
+            step={0.5}
+            value={object.shadowBlur}
+            onChange={(shadowBlur) => updateObject(object.id, { shadowBlur: Math.max(0, shadowBlur) })}
+          />
+        </div>
+        {!isPoint && (
+          <div className="field-row">
+            <span className="field-label">Penumbra</span>
+            <SliderField
+              max={5}
+              step={0.1}
+              value={object.shadowPenumbra}
+              onChange={(shadowPenumbra) =>
+                updateObject(object.id, { shadowPenumbra: Math.max(0, shadowPenumbra) })
+              }
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export function Inspector() {
   const objects = useEditorStore((s) => s.objects)
   const selectedId = useEditorStore((s) => s.selectedId)
@@ -177,10 +435,16 @@ export function Inspector() {
           setTransformMode(transformMode === 'rotate' ? 'translate' : 'rotate')
           break
         case 's':
-          setTransformMode(transformMode === 'scale' ? 'translate' : 'scale')
+          // Scale is meaningless for lights (see SceneObjects.tsx's
+          // effectiveTransformMode) — don't even flip the global mode.
+          if (!isLightKind(object.kind)) {
+            setTransformMode(transformMode === 'scale' ? 'translate' : 'scale')
+          }
           break
         case 'f':
-          setTransformMode(transformMode === 'scaleFree' ? 'translate' : 'scaleFree')
+          if (!isLightKind(object.kind)) {
+            setTransformMode(transformMode === 'scaleFree' ? 'translate' : 'scaleFree')
+          }
           break
         case 'delete':
         case 'backspace':
@@ -196,6 +460,7 @@ export function Inspector() {
   }, [object, transformMode, setTransformMode, removeObject])
 
   if (!object) return <SceneInspector />
+  if (isLightKind(object.kind)) return <LightInspector object={object} />
 
   const baseSize = PRIMITIVE_BASE_SIZE[object.kind]
   const dimensions = baseSize.map((size, i) => size * object.scale[i]) as [number, number, number]

@@ -1,11 +1,35 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
-import { Color } from 'three'
+import { Color, NeutralToneMapping } from 'three'
 import { WebGPURenderer } from 'three/webgpu'
 import { Ground } from './Ground'
+import { PRIMITIVE_BASE_SIZE } from './primitives'
 import { SceneObjects } from './SceneObjects'
 import { useEditorStore } from '../state/useEditorStore'
+import type { SceneObject } from '../types'
+
+const DEFAULT_SHADOW_RADIUS = 20
+const SHADOW_RADIUS_MARGIN = 1.15
+
+// Dynamic shadow-camera framing: a fixed -20/20 frustum clips shadows once
+// objects move far from the origin. Recomputed from the current scene's
+// objects instead — same idea as the folio-2025-study reference (see
+// editworld-vtt skill notes), simplified to an origin-centered radius rather
+// than a full off-center bounding box. Never shrinks below the old default,
+// so small/empty scenes keep the same framing as before.
+function computeShadowRadius(objects: SceneObject[]): number {
+  let maxReach = DEFAULT_SHADOW_RADIUS
+  for (const object of objects) {
+    const [w, h, d] = PRIMITIVE_BASE_SIZE[object.kind]
+    const halfDiagonal =
+      0.5 * Math.hypot(w * object.scale[0], h * object.scale[1], d * object.scale[2])
+    const reach =
+      Math.hypot(object.position[0], object.position[1], object.position[2]) + halfDiagonal
+    if (reach > maxReach) maxReach = reach
+  }
+  return maxReach * SHADOW_RADIUS_MARGIN
+}
 
 // Sets scene.background imperatively (vs. the declarative
 // `<color attach="background" args={[hex]} />`) so a color coming from the
@@ -23,11 +47,28 @@ function SceneBackground({ color }: { color: string }) {
   return null
 }
 
+// Exposure multiplier on top of the renderer's tone mapping (set once at
+// creation below) — same knob as the "physically-correct" three.js example
+// this was modeled after (webgpu_lights_physical.html: `renderer.
+// toneMappingExposure = Math.pow(params.exposure, 5.0)`), useful now that
+// lights are placeable objects with unbounded intensity and can blow out
+// highlights without it.
+function ToneMappingExposure({ exposure }: { exposure: number }) {
+  const gl = useThree((s) => s.gl)
+  useEffect(() => {
+    gl.toneMappingExposure = exposure
+  }, [gl, exposure])
+  return null
+}
+
 export function Editor3D() {
   const orbitControlsRef = useRef(null)
   const select = useEditorStore((s) => s.select)
   const sceneSettings = useEditorStore((s) => s.sceneSettings)
   const quality = useEditorStore((s) => s.quality)
+  const objects = useEditorStore((s) => s.objects)
+  const shadowRadius = useMemo(() => computeShadowRadius(objects), [objects])
+  const shadowMapSize = quality === 'high' ? 2048 : 1024
 
   return (
     <Canvas
@@ -52,22 +93,29 @@ export function Editor3D() {
             antialias: true,
             forceWebGL: false,
           })
+          // Neutral tone mapping (same choice three.js's own
+          // webgpu_lights_clustered.html example makes) — without any tone
+          // mapping, bright point/spot lights just clip to solid white
+          // instead of rolling off smoothly. Exposure itself stays a
+          // per-scene setting (see ToneMappingExposure below).
+          renderer.toneMapping = NeutralToneMapping
           await renderer.init()
           return renderer
         }
       }
     >
       <SceneBackground color={sceneSettings.backgroundColor} />
+      <ToneMappingExposure exposure={sceneSettings.toneMappingExposure} />
       <ambientLight intensity={sceneSettings.ambientIntensity} />
       <directionalLight
         position={[10, 15, 5]}
         intensity={sceneSettings.directionalIntensity}
         castShadow
-        shadow-mapSize={[2048, 2048]}
-        shadow-camera-left={-20}
-        shadow-camera-right={20}
-        shadow-camera-top={20}
-        shadow-camera-bottom={-20}
+        shadow-mapSize={[shadowMapSize, shadowMapSize]}
+        shadow-camera-left={-shadowRadius}
+        shadow-camera-right={shadowRadius}
+        shadow-camera-top={shadowRadius}
+        shadow-camera-bottom={-shadowRadius}
         shadow-normalBias={0.03}
         shadow-bias={-0.0005}
       />

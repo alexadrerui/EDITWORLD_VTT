@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
-import { Plus, Redo2, Undo2 } from 'lucide-react'
-import type { PrimitiveKind } from '../types'
+import { Lightbulb, Plus, Redo2, Undo2 } from 'lucide-react'
+import type { LightKind, PrimitiveKind } from '../types'
 import { useEditorStore } from '../state/useEditorStore'
 import { useDropdown } from './useDropdown'
 
@@ -10,6 +10,12 @@ const PRIMITIVES: { kind: PrimitiveKind; label: string }[] = [
   { kind: 'cylinder', label: 'Cilindro' },
   { kind: 'cone', label: 'Cone' },
   { kind: 'plane', label: 'Placa' },
+]
+
+const LIGHTS: { kind: LightKind; label: string }[] = [
+  { kind: 'pointLight', label: 'Luz de ponto' },
+  { kind: 'spotLight', label: 'Luz spot' },
+  { kind: 'directionalLight', label: 'Luz direcional' },
 ]
 
 function HistoryButtons() {
@@ -73,11 +79,40 @@ function AddObjectMenu() {
   )
 }
 
+function AddLightMenu() {
+  const addObject = useEditorStore((s) => s.addObject)
+  const { open, setOpen, rootRef } = useDropdown<HTMLDivElement>()
+
+  return (
+    <div className="dropdown" ref={rootRef}>
+      <button onClick={() => setOpen((v) => !v)}>
+        <Lightbulb size={14} /> Adicionar luz
+      </button>
+      {open && (
+        <div className="dropdown-menu">
+          {LIGHTS.map((l) => (
+            <button
+              key={l.kind}
+              onClick={() => {
+                addObject(l.kind)
+                setOpen(false)
+              }}
+            >
+              {l.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function Toolbar() {
   return (
     <div className="toolbar">
       <div className="toolbar-group">
         <AddObjectMenu />
+        <AddLightMenu />
       </div>
 
       <HistoryButtons />

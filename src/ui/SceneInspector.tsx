@@ -57,6 +57,18 @@ export function SceneInspector() {
           />
         </div>
         <div className="field-row">
+          <span className="field-label">Exposição</span>
+          <input
+            type="number"
+            step={0.05}
+            min={0}
+            value={sceneSettings.toneMappingExposure}
+            onChange={(e) =>
+              updateSceneSettings({ toneMappingExposure: Math.max(0, Number(e.target.value)) })
+            }
+          />
+        </div>
+        <div className="field-row">
           <span className="field-label">Modelo de grade</span>
           <SegmentedControl options={GRID_STYLE_OPTIONS} value={gridStyle} onChange={setGridStyle} />
         </div>
