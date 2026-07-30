@@ -142,3 +142,8 @@ export type GizmoSpace = 'world' | 'local'
 // right buttons) — preserves the current OrbitControls target/distance,
 // only snaps the viewing direction. See Editor3D.tsx's AXIS_VIEW_DIRECTIONS.
 export type AxisView = 'front' | 'back' | 'top' | 'left' | 'right'
+
+// Category tabs of the bottom AssetBrowser panel (Interverse Engine's
+// "Project Folder" — see AssetBrowser.tsx), adapted to concepts that
+// actually exist in this project (no Scripts/Particles/Materials-as-asset).
+export type AssetBrowserTab = 'scenes' | 'objects' | 'textures' | 'store'

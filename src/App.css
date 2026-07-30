@@ -286,6 +286,219 @@
   color: #3a6df0;
 }
 
+/* Bottom AssetBrowser panel (Interverse Engine's "Project Folder" — see
+   editworld-vtt skill notes), reskinned to our floating-panel visual
+   language (blur/rounded/border) instead of their docked full-width bar.
+   The toggle tab stays put at a fixed height so it's always reachable as a
+   handle to close the panel again. */
+.asset-browser-toggle {
+  position: absolute;
+  bottom: 68px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 22px;
+  background: rgba(26, 29, 34, 0.92);
+  backdrop-filter: blur(6px);
+  border: 1px solid #33373f;
+  border-radius: 999px;
+  color: #8a8f98;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.asset-browser-toggle:hover {
+  color: #e4e6eb;
+}
+
+.asset-browser {
+  position: absolute;
+  bottom: 104px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  width: min(720px, calc(100% - 40px));
+  height: 260px;
+  background: rgba(26, 29, 34, 0.92);
+  backdrop-filter: blur(6px);
+  border: 1px solid #33373f;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+}
+
+.asset-browser-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 140px;
+  flex-shrink: 0;
+  padding: 10px;
+  border-right: 1px solid #2a2e35;
+}
+
+.asset-browser-sidebar button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  color: #8a8f98;
+  border: none;
+  border-radius: 6px;
+  padding: 7px 8px;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.asset-browser-sidebar button:hover {
+  background: #23262d;
+  color: #e4e6eb;
+}
+
+.asset-browser-sidebar button.active {
+  background: #2c3038;
+  color: #3a6df0;
+}
+
+.asset-browser-content {
+  flex: 1;
+  padding: 14px;
+  overflow-y: auto;
+}
+
+.asset-browser-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #565b66;
+  font-size: 13px;
+}
+
+.asset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 8px;
+}
+
+.asset-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  background: #23262d;
+  border: 1px solid #33373f;
+  border-radius: 8px;
+  padding: 12px 6px;
+  color: #c9cdd4;
+}
+
+button.asset-tile {
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+button.asset-tile:hover {
+  background: #2c3038;
+  border-color: #454b56;
+}
+
+button.asset-tile.active {
+  border-color: #3a6df0;
+  color: #e4e6eb;
+}
+
+.asset-tile-icon {
+  display: flex;
+  color: #8a8f98;
+}
+
+.asset-tile-label {
+  font-size: 11px;
+  text-align: center;
+  line-height: 1.3;
+}
+
+.asset-tile-check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  color: #3a6df0;
+}
+
+/* No real asset-store backend — these are static placeholder cards, dashed
+   border to visually signal "not real content" rather than pretending. */
+.asset-tile-mock {
+  border-style: dashed;
+  opacity: 0.6;
+}
+
+/* Collapse tab for the Hierarchy/Inspector floating panels (Interverse
+   Engine's edge arrows — see editworld-vtt skill notes). Sits just outside
+   the panel's outer edge when open and slides back to the screen edge when
+   closed. Same rounded-pill look as .asset-browser-toggle (not flush/
+   half-rounded against the panel — that read as merged into the panel
+   instead of a separate control, and didn't match the bottom toggle's
+   style). Panel width is the fixed .floating-panel default (260px), so the
+   open offset is a plain constant rather than something measured at
+   runtime.
+   `top` is a fixed offset near the panel's own header, not `top: 50%` of
+   the viewport — the panels' heights vary a lot with content (Hierarchy
+   with 2 objects vs. 20; SceneInspector vs. a full object Inspector), and
+   centering on the viewport left the tab floating disconnected below short
+   panels instead of reading as attached to them. */
+.panel-collapse-toggle {
+  position: absolute;
+  top: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 32px;
+  background: rgba(26, 29, 34, 0.92);
+  backdrop-filter: blur(6px);
+  border: 1px solid #33373f;
+  border-radius: 999px;
+  color: #8a8f98;
+  cursor: pointer;
+  z-index: 1;
+  transition: left 0.15s, right 0.15s;
+}
+
+.panel-collapse-toggle:hover {
+  color: #e4e6eb;
+}
+
+/* Chromium quirk: an <svg> sized only via its width/height HTML attributes
+   (as lucide-react renders) doesn't reliably keep that size as a flex
+   item's content size — it was collapsing to ~2px here. flex-shrink: 0
+   pins it to its intrinsic size regardless. */
+.panel-collapse-toggle svg {
+  flex-shrink: 0;
+}
+
+.panel-collapse-toggle--left {
+  left: 12px;
+}
+
+.panel-collapse-toggle--left.is-open {
+  left: 280px;
+}
+
+.panel-collapse-toggle--right {
+  right: 12px;
+}
+
+.panel-collapse-toggle--right.is-open {
+  right: 280px;
+}
+
 .objects-header {
   display: flex;
   align-items: center;

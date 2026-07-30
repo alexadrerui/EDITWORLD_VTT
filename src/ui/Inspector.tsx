@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import {
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Focus,
   Link2,
   Magnet,
@@ -425,7 +427,19 @@ export function Inspector() {
   const transformMode = useEditorStore((s) => s.transformMode)
   const setTransformMode = useEditorStore((s) => s.setTransformMode)
   const requestCameraFocus = useEditorStore((s) => s.requestCameraFocus)
+  const inspectorVisible = useEditorStore((s) => s.inspectorVisible)
+  const toggleInspectorVisible = useEditorStore((s) => s.toggleInspectorVisible)
   const object = objects.find((o) => o.id === selectedId)
+
+  const collapseToggle = (
+    <button
+      className={`panel-collapse-toggle panel-collapse-toggle--right ${inspectorVisible ? 'is-open' : ''}`}
+      onClick={() => toggleInspectorVisible()}
+      title={inspectorVisible ? 'Esconder painel' : 'Mostrar painel'}
+    >
+      {inspectorVisible ? <ChevronRight size={13} /> : <ChevronLeft size={13} />}
+    </button>
+  )
 
   // Local, not persisted per-object — a workflow toggle (like Spline's), not
   // content about the object itself.
@@ -475,8 +489,22 @@ export function Inspector() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [object, transformMode, setTransformMode, removeObject, requestCameraFocus])
 
-  if (!object) return <SceneInspector />
-  if (isLightKind(object.kind)) return <LightInspector object={object} />
+  if (!object) {
+    return (
+      <>
+        {inspectorVisible && <SceneInspector />}
+        {collapseToggle}
+      </>
+    )
+  }
+  if (isLightKind(object.kind)) {
+    return (
+      <>
+        {inspectorVisible && <LightInspector object={object} />}
+        {collapseToggle}
+      </>
+    )
+  }
 
   const baseSize = PRIMITIVE_BASE_SIZE[object.kind]
   const dimensions = baseSize.map((size, i) => size * object.scale[i]) as [number, number, number]
@@ -499,7 +527,9 @@ export function Inspector() {
   }
 
   return (
-    <div className="floating-panel selection-panel">
+    <>
+      {inspectorVisible && (
+        <div className="floating-panel selection-panel">
       <div className="selection-header">
         <span className="selection-category">{PRIMITIVE_LABEL[object.kind].toUpperCase()}</span>
         <input
@@ -676,6 +706,9 @@ export function Inspector() {
           />
         </div>
       </div>
-    </div>
+        </div>
+      )}
+      {collapseToggle}
+    </>
   )
 }

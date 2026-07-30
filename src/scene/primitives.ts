@@ -1,3 +1,19 @@
+import {
+  Box,
+  Circle,
+  Cone,
+  Cylinder,
+  Gem,
+  Hexagon,
+  Infinity as InfinityIcon,
+  Lightbulb,
+  Spotlight,
+  Square,
+  Sun,
+  Torus,
+  Pyramid,
+  type LucideIcon,
+} from 'lucide-react'
 import type { LightKind, PrimitiveKind, ShadowResolution } from '../types'
 
 // Bounding-box size (width, height, depth) of each primitive's base geometry
@@ -46,6 +62,24 @@ export const PRIMITIVE_LABEL: Record<PrimitiveKind, string> = {
   pointLight: 'Luz de ponto',
   spotLight: 'Luz spot',
   directionalLight: 'Luz direcional',
+}
+
+// Shared with Hierarchy.tsx and AssetBrowser.tsx so the icon-per-kind mapping
+// can't drift between the two places that list primitives.
+export const PRIMITIVE_ICON: Record<PrimitiveKind, LucideIcon> = {
+  box: Box,
+  sphere: Circle,
+  cylinder: Cylinder,
+  cone: Cone,
+  plane: Square,
+  torus: Torus,
+  pyramid: Pyramid,
+  icosahedron: Gem,
+  dodecahedron: Hexagon,
+  torusKnot: InfinityIcon,
+  pointLight: Lightbulb,
+  spotLight: Spotlight,
+  directionalLight: Sun,
 }
 
 export const LIGHT_KINDS: LightKind[] = ['pointLight', 'spotLight', 'directionalLight']

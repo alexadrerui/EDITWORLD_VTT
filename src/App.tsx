@@ -4,6 +4,7 @@ import { Toolbar } from './ui/Toolbar'
 import { Hierarchy } from './ui/Hierarchy'
 import { Inspector } from './ui/Inspector'
 import { SnapBar } from './ui/SnapBar'
+import { AssetBrowser } from './ui/AssetBrowser'
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
           <Hierarchy />
           <Inspector />
           <SnapBar />
+          <AssetBrowser />
         </div>
       </div>
     </div>

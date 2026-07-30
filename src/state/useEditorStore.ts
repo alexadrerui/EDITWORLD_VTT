@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type {
+  AssetBrowserTab,
   AxisView,
   GizmoSpace,
   GraphicsQuality,
@@ -194,6 +195,10 @@ interface EditorState {
   gizmoSpace: GizmoSpace
   axisView: AxisView | null
   axisViewNonce: number
+  assetBrowserOpen: boolean
+  assetBrowserTab: AssetBrowserTab
+  hierarchyVisible: boolean
+  inspectorVisible: boolean
   undoStack: HistoryEntry[]
   redoStack: HistoryEntry[]
   addObject: (kind: PrimitiveKind) => void
@@ -221,6 +226,10 @@ interface EditorState {
   requestCameraFocus: (id: string) => void
   setGizmoSpace: (space: GizmoSpace) => void
   requestAxisView: (axis: AxisView) => void
+  toggleAssetBrowser: () => void
+  setAssetBrowserTab: (tab: AssetBrowserTab) => void
+  toggleHierarchyVisible: () => void
+  toggleInspectorVisible: () => void
   undo: () => void
   redo: () => void
   saveScene: () => void
@@ -251,6 +260,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   gizmoSpace: 'world',
   axisView: null,
   axisViewNonce: 0,
+  assetBrowserOpen: false,
+  assetBrowserTab: 'objects',
+  hierarchyVisible: true,
+  inspectorVisible: true,
   undoStack: [],
   redoStack: [],
 
@@ -392,6 +405,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   // `focusNonce` above.
   requestAxisView: (axis) =>
     set((state) => ({ axisView: axis, axisViewNonce: state.axisViewNonce + 1 })),
+  toggleAssetBrowser: () =>
+    set((state) => ({ assetBrowserOpen: !state.assetBrowserOpen })),
+  setAssetBrowserTab: (tab) => set({ assetBrowserTab: tab }),
+  toggleHierarchyVisible: () =>
+    set((state) => ({ hierarchyVisible: !state.hierarchyVisible })),
+  toggleInspectorVisible: () =>
+    set((state) => ({ inspectorVisible: !state.inspectorVisible })),
 
   undo: () =>
     set((state) => {

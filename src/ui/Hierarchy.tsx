@@ -1,53 +1,25 @@
 import { Fragment, useState } from 'react'
 import {
-  Box,
   Check,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
-  Circle,
-  Cone,
-  Cylinder,
   Eye,
   EyeOff,
   FolderPlus,
-  Gem,
   Group as GroupIcon,
-  Hexagon,
   Home,
-  Infinity as InfinityIcon,
-  Lightbulb,
   Lock,
   Plus,
-  Pyramid,
   Save,
   Search,
-  Spotlight,
-  Square,
-  Sun,
-  Torus,
   Trash2,
   Unlock,
 } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
 import { useEditorStore } from '../state/useEditorStore'
-import type { PrimitiveKind, SceneObject } from '../types'
+import { PRIMITIVE_ICON as KIND_ICON } from '../scene/primitives'
+import type { SceneObject } from '../types'
 import { ConfirmDialog } from './ConfirmDialog'
-
-const KIND_ICON: Record<PrimitiveKind, LucideIcon> = {
-  box: Box,
-  sphere: Circle,
-  cylinder: Cylinder,
-  cone: Cone,
-  plane: Square,
-  torus: Torus,
-  pyramid: Pyramid,
-  icosahedron: Gem,
-  dodecahedron: Hexagon,
-  torusKnot: InfinityIcon,
-  pointLight: Lightbulb,
-  spotLight: Spotlight,
-  directionalLight: Sun,
-}
 
 function ScenesSection() {
   const scenesIndex = useEditorStore((s) => s.scenesIndex)
@@ -265,6 +237,8 @@ export function Hierarchy() {
   const renameGroup = useEditorStore((s) => s.renameGroup)
   const toggleGroupLocked = useEditorStore((s) => s.toggleGroupLocked)
   const toggleGroupHidden = useEditorStore((s) => s.toggleGroupHidden)
+  const hierarchyVisible = useEditorStore((s) => s.hierarchyVisible)
+  const toggleHierarchyVisible = useEditorStore((s) => s.toggleHierarchyVisible)
 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draftName, setDraftName] = useState('')
@@ -318,10 +292,12 @@ export function Hierarchy() {
   })
 
   return (
-    <div className="floating-panel hierarchy">
-      <ScenesSection />
+    <>
+      {hierarchyVisible && (
+        <div className="floating-panel hierarchy">
+          <ScenesSection />
 
-      <div className="objects-header">
+          <div className="objects-header">
         <h3>Objetos</h3>
         <button className="scenes-add" onClick={() => createGroup()} title="Novo grupo">
           <FolderPlus size={14} />
@@ -450,6 +426,15 @@ export function Hierarchy() {
           </ul>
         </div>
       )}
-    </div>
+        </div>
+      )}
+      <button
+        className={`panel-collapse-toggle panel-collapse-toggle--left ${hierarchyVisible ? 'is-open' : ''}`}
+        onClick={() => toggleHierarchyVisible()}
+        title={hierarchyVisible ? 'Esconder painel' : 'Mostrar painel'}
+      >
+        {hierarchyVisible ? <ChevronLeft size={13} /> : <ChevronRight size={13} />}
+      </button>
+    </>
   )
 }
