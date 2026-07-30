@@ -2,6 +2,11 @@ import { useEditorStore } from '../state/useEditorStore'
 import { SegmentedControl } from './Inspector'
 import type { GridStyle } from '../types'
 
+const CSM_OPTIONS = [
+  { value: 'off', label: 'Não' },
+  { value: 'on', label: 'Sim' },
+]
+
 const GRID_STYLE_OPTIONS: { value: GridStyle; label: string }[] = [
   { value: 'lines', label: 'Linhas' },
   { value: 'dots', label: 'Pontos' },
@@ -54,6 +59,14 @@ export function SceneInspector() {
             onChange={(e) =>
               updateSceneSettings({ directionalIntensity: Math.max(0, Number(e.target.value)) })
             }
+          />
+        </div>
+        <div className="field-row">
+          <span className="field-label">Sombras em cascata</span>
+          <SegmentedControl
+            options={CSM_OPTIONS}
+            value={sceneSettings.csmEnabled ? 'on' : 'off'}
+            onChange={(v) => updateSceneSettings({ csmEnabled: v === 'on' })}
           />
         </div>
         <div className="field-row">

@@ -14,7 +14,7 @@ import {
   Pyramid,
   type LucideIcon,
 } from 'lucide-react'
-import type { LightKind, PrimitiveKind, ShadowResolution } from '../types'
+import type { LightKind, PrimitiveKind, SceneObject, ShadowResolution } from '../types'
 
 // Bounding-box size (width, height, depth) of each primitive's base geometry
 // at scale [1, 1, 1] — must match the geometry args in SceneObjectMesh.tsx's
@@ -121,8 +121,41 @@ export const SHADOW_MAP_SIZE: Record<ShadowResolution, number> = {
   high: 2048,
 }
 
+const SHADOW_RADIUS_MARGIN = 1.15
+
+// Dynamic shadow-camera framing, shared by the scene's own always-on
+// directional light (Editor3D.tsx) and directional light-objects
+// (SceneObjectMesh.tsx) — a fixed frustum clips shadows once objects move
+// far from the origin. Recomputed from the current scene's objects instead —
+// same idea as the folio-2025-study reference (see editworld-vtt skill
+// notes), simplified to an origin-centered radius rather than a full
+// off-center bounding box. Never shrinks below `minRadius`, so small/empty
+// scenes (or a light-object whose own manually-set `shadowSize` is bigger
+// than what the scene currently needs) keep that framing instead of
+// shrinking to fit. `minRadius` is a fixed constant for the scene light
+// (`DEFAULT_SHADOW_RADIUS`) but the user's own `object.shadowSize` for
+// light-objects — that field becomes a floor the frustum never shrinks
+// below, rather than the sole value, so it still does something useful once
+// the scene auto-grows past it.
+export function computeShadowRadius(objects: SceneObject[], minRadius: number): number {
+  let maxReach = minRadius
+  for (const object of objects) {
+    const [w, h, d] = PRIMITIVE_BASE_SIZE[object.kind]
+    const halfDiagonal =
+      0.5 * Math.hypot(w * object.scale[0], h * object.scale[1], d * object.scale[2])
+    const reach =
+      Math.hypot(object.position[0], object.position[1], object.position[2]) + halfDiagonal
+    if (reach > maxReach) maxReach = reach
+  }
+  return maxReach * SHADOW_RADIUS_MARGIN
+}
+
 // How much bigger than the object the selection outline is drawn (see
-// SelectionOutline.tsx). Shared with ScaleFaceHandles.tsx so the scale
-// handles sit flush on the selection box itself, not on the object's own
-// surface — visually they belong to the selection box, not the object.
-export const SELECTION_OUTLINE_PADDING = 1.08
+// SelectionOutline.tsx) — a fixed world-space margin (meters), not a
+// percentage. A percentage-based padding made the visual gap balloon on
+// large/scaled-up objects while staying barely visible on small ones; this
+// stays the same physical size regardless of the object's own scale. Shared
+// with ScaleFaceHandles.tsx so the scale handles sit flush on the selection
+// box itself, not on the object's own surface — visually they belong to the
+// selection box, not the object.
+export const SELECTION_OUTLINE_MARGIN = 0.08

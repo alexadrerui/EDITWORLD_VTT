@@ -62,6 +62,12 @@ export interface SceneObject {
   // SceneObjectMesh.tsx's Material component).
   emissiveColor: string
   emissiveIntensity: number
+  // Material opacity, 0-1 (default 1 = fully opaque). `transparent` on the
+  // three.js material is derived from this (< 1) rather than stored as its
+  // own field — there's no case where a user wants "transparent" blending
+  // mode active while opacity is still 1, so a separate toggle would just be
+  // a second control that has to agree with this one.
+  opacity: number
   // Light-only fields (kind is a LightKind) — unused/ignored for meshes,
   // same convention as wireframe/flatShading being unused for planes etc.
   // `color` above doubles as the light's color.
@@ -106,6 +112,13 @@ export interface SceneSettings {
   // blow out highlights (now that lights are placeable objects with
   // unbounded intensity, see LIGHT_DEFAULTS).
   toneMappingExposure: number
+  // Cascaded Shadow Maps for the scene's own always-on directional light
+  // (see SunCSM in Editor3D.tsx) — camera-aware sharpening near the editor
+  // camera instead of one fixed-resolution map spread over the whole
+  // computeShadowRadius-sized frustum. Off by default: real render cost (N
+  // cascade passes), only worth it once a scene is big enough that the sun's
+  // shadow visibly looks blocky.
+  csmEnabled: boolean
 }
 
 export type TransformMode = 'translate' | 'rotate' | 'scale' | 'scaleFree'

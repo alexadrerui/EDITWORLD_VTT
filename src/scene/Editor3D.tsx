@@ -1,15 +1,23 @@
 import { useEffect, useMemo, useRef, type RefObject } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
-import { Color, NeutralToneMapping, OrthographicCamera, PerspectiveCamera, Vector3 } from 'three'
+import {
+  Color,
+  type DirectionalLight,
+  NeutralToneMapping,
+  OrthographicCamera,
+  PerspectiveCamera,
+  Vector3,
+} from 'three'
 import { emissive, mrt, output, pass, vec4 } from 'three/tsl'
 import { bloom } from 'three/addons/tsl/display/BloomNode.js'
+import { CSMShadowNode } from 'three/addons/csm/CSMShadowNode.js'
 import { BlendMode, NormalBlending, RenderPipeline, UnsignedByteType, WebGPURenderer } from 'three/webgpu'
 import { Ground } from './Ground'
-import { PRIMITIVE_BASE_SIZE } from './primitives'
+import { computeShadowRadius, PRIMITIVE_BASE_SIZE } from './primitives'
 import { SceneObjects } from './SceneObjects'
 import { useEditorStore } from '../state/useEditorStore'
-import type { AxisView, SceneObject } from '../types'
+import type { AxisView } from '../types'
 
 const BLOOM_STRENGTH = 1.5
 const BLOOM_RADIUS = 0.4
@@ -61,27 +69,10 @@ function BloomPipeline() {
   return null
 }
 
+// Floor for the scene's own shadow-camera radius (see computeShadowRadius in
+// primitives.ts, now shared with directional light-objects too) — never
+// shrinks below this, so small/empty scenes keep the same framing as before.
 const DEFAULT_SHADOW_RADIUS = 20
-const SHADOW_RADIUS_MARGIN = 1.15
-
-// Dynamic shadow-camera framing: a fixed -20/20 frustum clips shadows once
-// objects move far from the origin. Recomputed from the current scene's
-// objects instead — same idea as the folio-2025-study reference (see
-// editworld-vtt skill notes), simplified to an origin-centered radius rather
-// than a full off-center bounding box. Never shrinks below the old default,
-// so small/empty scenes keep the same framing as before.
-function computeShadowRadius(objects: SceneObject[]): number {
-  let maxReach = DEFAULT_SHADOW_RADIUS
-  for (const object of objects) {
-    const [w, h, d] = PRIMITIVE_BASE_SIZE[object.kind]
-    const halfDiagonal =
-      0.5 * Math.hypot(w * object.scale[0], h * object.scale[1], d * object.scale[2])
-    const reach =
-      Math.hypot(object.position[0], object.position[1], object.position[2]) + halfDiagonal
-    if (reach > maxReach) maxReach = reach
-  }
-  return maxReach * SHADOW_RADIUS_MARGIN
-}
 
 // Sets scene.background imperatively (vs. the declarative
 // `<color attach="background" args={[hex]} />`) so a color coming from the
@@ -96,6 +87,83 @@ function SceneBackground({ color }: { color: string }) {
   useEffect(() => {
     scene.background = new Color(color)
   }, [scene, color])
+  return null
+}
+
+// Cascaded Shadow Maps for the scene's own always-on directional light —
+// chosen over TileShadowNode (the other candidate analyzed) because it's
+// camera-aware: sharpness concentrates wherever the editor camera is
+// currently looking, rather than a fixed grid over the whole
+// computeShadowRadius-sized frustum (see the editworld-vtt skill's shadow
+// sections for the full comparison). Opt-in via SceneSettings.csmEnabled
+// (SceneInspector.tsx) — real render cost (one shadow-camera pass per
+// cascade), only worth it once a scene is big enough that the sun's shadow
+// visibly looks blocky.
+const CSM_CASCADES = 3
+const CSM_MODE = 'practical' as const
+
+function SunCSM({
+  sunRef,
+  enabled,
+  mapSize,
+}: {
+  sunRef: RefObject<DirectionalLight | null>
+  enabled: boolean
+  mapSize: number
+}) {
+  const camera = useThree((s) => s.camera)
+  const size = useThree((s) => s.size)
+  const csmRef = useRef<CSMShadowNode | null>(null)
+
+  // Builds/tears down the CSM instance itself — only when it's actually
+  // toggled on/off, or when `mapSize` changes (quality preset), since each
+  // cascade clones the light's `shadow.mapSize` once at first use (same
+  // "can't resize an already-allocated shadow texture" constraint already
+  // documented for per-light shadowResolution changes elsewhere in this
+  // file/SceneObjectMesh.tsx) — not on every camera swap/resize, which the
+  // second effect below handles far more cheaply.
+  useEffect(() => {
+    const sun = sunRef.current
+    if (!sun || !enabled) return
+
+    const csm = new CSMShadowNode(sun, { cascades: CSM_CASCADES, mode: CSM_MODE })
+    sun.shadow.shadowNode = csm
+    csmRef.current = csm
+
+    return () => {
+      csm.dispose()
+      if (sun.shadow.shadowNode === csm) sun.shadow.shadowNode = undefined
+      csmRef.current = null
+    }
+  }, [enabled, sunRef, mapSize])
+
+  // Keeps the CSM's tracked camera in sync with whichever camera is
+  // currently active (CameraRig swaps perspective<->orthographic) and
+  // recomputes cascade splits/bounds whenever that camera's frustum changes
+  // structurally (resize, projection swap, fov change) — per-frame
+  // cascade-light repositioning already happens automatically inside
+  // CSMShadowNode's own updateBefore(), no manual call needed for that part.
+  // Once CSM is active, this supersedes the sun's own
+  // shadow-camera-left/right/top/bottom props below (computeShadowRadius) —
+  // each cascade gets its own bounds computed from the view camera instead.
+  //
+  // `csm.camera` starts `null` and is only populated by CSM's own lazy
+  // `_init()` — triggered by the renderer's first shadow-node build pass for
+  // this light, which captures whichever camera is actively rendering at
+  // that point and also calls `updateFrustums()` itself (confirmed by
+  // reading the source: `_init()`'s last line is `this.updateFrustums()`).
+  // Calling `updateFrustums()` here before that first pass has run throws —
+  // `mainFrustum` is still null too — so this only ever reacts to *later*
+  // camera changes, matching the upstream example's own usage (it never
+  // calls updateFrustums() right after construction either, only from
+  // resize/GUI-change handlers).
+  useEffect(() => {
+    const csm = csmRef.current
+    if (!csm || csm.camera === null) return
+    csm.camera = camera
+    csm.updateFrustums()
+  }, [camera, size, enabled])
+
   return null
 }
 
@@ -315,12 +383,20 @@ function CameraRig({ orbitControlsRef }: { orbitControlsRef: RefObject<any> }) {
 
 export function Editor3D() {
   const orbitControlsRef = useRef(null)
+  const sunRef = useRef<DirectionalLight | null>(null)
   const select = useEditorStore((s) => s.select)
   const sceneSettings = useEditorStore((s) => s.sceneSettings)
   const quality = useEditorStore((s) => s.quality)
   const objects = useEditorStore((s) => s.objects)
-  const shadowRadius = useMemo(() => computeShadowRadius(objects), [objects])
+  const shadowRadius = useMemo(
+    () => computeShadowRadius(objects, DEFAULT_SHADOW_RADIUS),
+    [objects],
+  )
   const shadowMapSize = quality === 'high' ? 2048 : 1024
+  // Shadows off entirely at "Qualidade: Baixa" (shadows={false} below) — CSM
+  // would have nothing to render against, so it never activates in that case
+  // regardless of the scene's own csmEnabled toggle.
+  const csmActive = sceneSettings.csmEnabled && quality !== 'low'
 
   return (
     <Canvas
@@ -351,6 +427,13 @@ export function Editor3D() {
           // instead of rolling off smoothly. Exposure itself stays a
           // per-scene setting (see ToneMappingExposure below).
           renderer.toneMapping = NeutralToneMapping
+          // Colored/opacity-aware shadows (three.js's own
+          // webgpu_shadowmap_opacity.html example) — without this, the
+          // shadow map only ever stores binary occlusion, so a translucent
+          // object (see SceneObject.opacity) still casts a fully solid black
+          // shadow regardless of how see-through it actually is. Paired with
+          // each material's `castShadowNode` (see SceneObjectMesh.tsx).
+          renderer.shadowMap.transmitted = true
           await renderer.init()
           return renderer
         }
@@ -360,8 +443,10 @@ export function Editor3D() {
       <ToneMappingExposure exposure={sceneSettings.toneMappingExposure} />
       <CameraRig orbitControlsRef={orbitControlsRef} />
       <BloomPipeline />
+      <SunCSM sunRef={sunRef} enabled={csmActive} mapSize={shadowMapSize} />
       <ambientLight intensity={sceneSettings.ambientIntensity} />
       <directionalLight
+        ref={sunRef}
         position={[10, 15, 5]}
         intensity={sceneSettings.directionalIntensity}
         castShadow

@@ -22,6 +22,7 @@ const DEFAULT_SCENE_SETTINGS: SceneSettings = {
   ambientIntensity: 1.2,
   directionalIntensity: 3,
   toneMappingExposure: 1,
+  csmEnabled: false,
 }
 
 const INDEX_KEY = 'editworld-vtt:scenes'
@@ -83,6 +84,7 @@ function loadSceneData(id: string): SceneData {
           materialType: 'standard',
           emissiveColor: '#000000',
           emissiveIntensity: 0,
+          opacity: 1,
           ...LIGHT_DEFAULTS,
           ...o,
         }) as SceneObject,
@@ -156,6 +158,7 @@ function createPrimitive(kind: PrimitiveKind): SceneObject {
     materialType: 'standard',
     emissiveColor: '#000000',
     emissiveIntensity: 0,
+    opacity: 1,
     ...LIGHT_DEFAULTS,
     // Directional lights have no distance falloff, so the shared light
     // intensity default (tuned for point/spot) would be blindingly bright.

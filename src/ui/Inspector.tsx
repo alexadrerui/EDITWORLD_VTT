@@ -645,6 +645,17 @@ export function Inspector() {
           />
         </div>
         <div className="field-row">
+          <span className="field-label">Opacidade</span>
+          <SliderField
+            max={1}
+            step={0.01}
+            value={object.opacity}
+            onChange={(opacity) =>
+              updateObject(object.id, { opacity: Math.min(1, Math.max(0, opacity)) })
+            }
+          />
+        </div>
+        <div className="field-row">
           <span className="field-label">Cor emissiva</span>
           <input
             type="color"

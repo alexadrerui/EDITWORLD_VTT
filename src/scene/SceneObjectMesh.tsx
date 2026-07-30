@@ -1,28 +1,31 @@
-import { forwardRef, useEffect, useMemo, useRef, type RefObject } from 'react'
+import { forwardRef, useEffect, useMemo, useRef } from 'react'
 import type { ThreeEvent } from '@react-three/fiber'
 import {
   BackSide,
   BufferGeometry,
-  Color,
   type DirectionalLight,
   DoubleSide,
   Float32BufferAttribute,
   FrontSide,
   type Mesh,
-  type MeshLambertMaterial,
-  type MeshPhongMaterial,
-  type MeshPhysicalMaterial,
-  type MeshStandardMaterial,
-  type MeshToonMaterial,
   type Object3D,
   type PointLight,
   type Side,
   type SpotLight,
 } from 'three'
-import type { MaterialSide, SceneObject, ShadowMode } from '../types'
+import {
+  MeshLambertNodeMaterial,
+  MeshPhongNodeMaterial,
+  MeshPhysicalNodeMaterial,
+  MeshStandardNodeMaterial,
+  MeshToonNodeMaterial,
+  type NodeMaterial,
+} from 'three/webgpu'
+import { Fn, mix, reference, vec3, vec4 } from 'three/tsl'
+import type { MaterialSide, MaterialType, SceneObject, ShadowMode } from '../types'
 import { useEditorStore } from '../state/useEditorStore'
 import { usePointerClick } from './usePointerClick'
-import { isLightKind, PRIMITIVE_BASE_SIZE, SHADOW_MAP_SIZE } from './primitives'
+import { computeShadowRadius, isLightKind, PRIMITIVE_BASE_SIZE, SHADOW_MAP_SIZE } from './primitives'
 
 const MATERIAL_SIDE: Record<MaterialSide, Side> = {
   front: FrontSide,
@@ -30,59 +33,143 @@ const MATERIAL_SIDE: Record<MaterialSide, Side> = {
   double: DoubleSide,
 }
 
-type AnyMeshMaterial =
-  | MeshStandardMaterial
-  | MeshLambertMaterial
-  | MeshPhongMaterial
-  | MeshPhysicalMaterial
-  | MeshToonMaterial
+// Classic JSX material tags (`<meshStandardMaterial>` etc.) don't expose
+// `castShadowNode` — that field only exists on `NodeMaterial` (confirmed in
+// node_modules/three/src/materials/nodes/NodeMaterial.js; the base classic
+// `Material` class has no such property), and the WebGPURenderer's automatic
+// classic-material-to-node conversion happens internally without ever
+// handing the resulting node material back to userland code. So every
+// object's material is now a real `three/webgpu` NodeMaterial instance built
+// here directly (one per shading model, matching MaterialType) instead of a
+// JSX tag — see the OPACITY_SHADOW_NODE comment below for why.
+const MATERIAL_CLASS = {
+  standard: MeshStandardNodeMaterial,
+  lambert: MeshLambertNodeMaterial,
+  phong: MeshPhongNodeMaterial,
+  physical: MeshPhysicalNodeMaterial,
+  toon: MeshToonNodeMaterial,
+} satisfies Record<MaterialType, new () => NodeMaterial>
 
-// Each shading model is a distinct three.js class, so R3F needs a distinct
-// JSX tag per type (unlike a prop, the element name can't be swapped
-// dynamically) — but they share this common prop set, which every listed
-// material class accepts (unused props on a given class are simply ignored,
-// not an error).
-function Material({
-  object,
-  isSelected,
-  materialRef,
-}: {
-  object: SceneObject
-  isSelected: boolean
-  materialRef: RefObject<AnyMeshMaterial | null>
-}) {
-  // The selection highlight used to tint the *emissive* channel — but that's
-  // the exact channel BloomPipeline (Editor3D.tsx) reads for selective bloom,
-  // so every selected object visibly bloomed regardless of its own glow
-  // settings. Fixed by tinting the diffuse `color` instead: emissive always
-  // reflects the object's own emissiveColor/emissiveIntensity, selected or
-  // not, so bloom only ever comes from deliberate glow, never from selection.
-  const displayColor = useMemo(() => {
-    if (!isSelected) return object.color
-    return new Color(object.color).lerp(new Color('#3a6df0'), 0.5).getStyle()
-  }, [object.color, isSelected])
+// Colored/opacity-aware shadow casting, ported from three.js's own
+// webgpu_shadowmap_opacity.html example: without this, the shadow map only
+// ever stores binary occlusion, so a translucent object (SceneObject.opacity
+// < 1) still casts a fully solid black shadow no matter how see-through it
+// actually is. Requires `renderer.shadowMap.transmitted = true` (see
+// Editor3D.tsx) — three.js logs a one-time warning if that's left off.
+//
+// Three real, non-obvious bugs found by directly sampling rendered shadow
+// pixels (canvas.toDataURL) rather than trusting a glance:
+//
+// 1. MUST be a vec4 with an explicit alpha, not a bare vec3 `mix(...)` (the
+//    shape the upstream example itself uses, via `castShadowNode.a`).
+//    Renderer.js's `_getShadowNodes` reads `castShadowNode.a` directly
+//    (`shadowAlpha = castShadowNode.a`) — swizzling a non-existent 4th
+//    component off a vec3 doesn't error, it just doesn't carry the value
+//    forward, which zeroes out the colored-shadow contribution downstream.
+//    Without this fix, a fully opaque object's shadow and a fully invisible
+//    (opacity 0) one's were pixel-identical — the whole feature was silently
+//    doing nothing despite looking plausible in an earlier casual check.
+//
+// 2. `materialColor`/`materialOpacity` (the generic "whichever material is
+//    live" accessors from 'three/tsl') do NOT resolve to the casting
+//    object's own material here — confirmed by swapping in
+//    `vec4(materialColor, 1)` and seeing every object's shadow stay neutral
+//    gray regardless of its actual color. Shadow casting compiles this node
+//    against a separate internal depth-material context, not the original
+//    mesh material, so the generic "current material" accessors read that
+//    context instead. Fixed with `reference(prop, type, object)` — the same
+//    idiom three.js's own ShadowNode.js uses internally (e.g. `reference(
+//    'intensity', 'float', shadow)`) — which captures a direct pointer to
+//    THIS specific material instance at node-creation time, sidestepping
+//    "current compile context" entirely. This is also why the node can no
+//    longer be a single module-level shared constant — it has to be built
+//    per material instance, closing over that instance's own
+//    `material.color`/`material.opacity`.
+//
+// 3. `mix(1, color, opacity)` — the upstream example's own formula — tints
+//    the shadow at opacity 1 (fully opaque, the default for every object)
+//    with the object's own diffuse color instead of a neutral shadow. That
+//    formula makes sense for the example's actual subject (a glass dragon
+//    with real light transmission, where "opacity 1" means "fully
+//    transmissive"), but for our plain alpha-blend `opacity` — where 1 means
+//    "an ordinary solid object" — it silently recolors literally every
+//    existing opaque object's shadow, confirmed by pixel-sampling a red
+//    sphere's shadow at opacity 1 as `(79,61,61)` (reddish) vs. `(60,60,60)`
+//    (neutral) before this feature ever existed. Fixed with a formula the
+//    user explicitly asked for: neutral at opacity 1 (grayscale envelope
+//    `vec3(1 - opacity)` — black/full shadow at opacity 1, white/no shadow
+//    at opacity 0, same convention the plain PCF shadow already used) with a
+//    "hat" weight (`1 - |2·opacity - 1|`, zero at both opacity endpoints,
+//    peaking at opacity 0.5) blending in the object's own color only while
+//    it's actually translucent. A solid opaque object's shadow is now
+//    pixel-identical to before this feature existed; only partway-
+//    transparent objects tint their own shadow.
+//
+// Verified with a step-by-step elimination: (a) a hardcoded `vec4(1,0,0,1)`
+// made every shadow visibly solid red — proved the transmitted-shadow
+// pipeline itself works; (b) `vec4(materialColor, 1)` stayed neutral gray —
+// isolated bug 2 to material-context resolution, not the vec3/vec4 shape;
+// (c) `reference()` + the original `mix(1, color, opacity)` formula
+// correctly faded/tinted translucent objects but revealed bug 3 (tinted
+// opaque objects too); (d) this grayscale-envelope + hat-weight version —
+// confirmed pixel-sampled neutral at opacity 1, fading white at opacity 0,
+// and tinted only in between.
+function buildOpacityShadowNode(material: NodeMaterial) {
+  const color = reference('color', 'color', material)
+  const opacity = reference('opacity', 'float', material)
+  return Fn(() => {
+    const base = vec3(opacity.oneMinus())
+    const tintWeight = opacity.mul(2).sub(1).abs().oneMinus()
+    return vec4(mix(base, color, tintWeight), 1)
+  })()
+}
 
-  const commonProps = {
-    ref: materialRef as never,
-    color: displayColor,
-    emissive: object.emissiveColor,
-    emissiveIntensity: object.emissiveIntensity,
-    wireframe: object.wireframe,
-    flatShading: object.flatShading,
-    side: MATERIAL_SIDE[object.side],
-  }
-  switch (object.materialType) {
-    case 'lambert':
-      return <meshLambertMaterial {...commonProps} />
-    case 'phong':
-      return <meshPhongMaterial {...commonProps} />
-    case 'physical':
-      return <meshPhysicalMaterial {...commonProps} />
-    case 'toon':
-      return <meshToonMaterial {...commonProps} />
-    default:
-      return <meshStandardMaterial {...commonProps} />
-  }
+function Material({ object }: { object: SceneObject }) {
+  // Rebuilt only when the shading model itself changes — everything else is
+  // applied onto the same instance below via plain property assignment
+  // (there's no declarative JSX prop-diffing for a `<primitive>`-attached
+  // material, so this has to be done imperatively).
+  const material = useMemo(() => new MATERIAL_CLASS[object.materialType](), [object.materialType])
+
+  // Dispose the GPU-side resources of the outgoing instance, whether it's
+  // being replaced by a materialType change or the object itself is removed.
+  useEffect(() => () => material.dispose(), [material])
+
+  useEffect(() => {
+    material.castShadowNode = buildOpacityShadowNode(material)
+  }, [material])
+
+  useEffect(() => {
+    material.color.set(object.color)
+    material.emissive.set(object.emissiveColor)
+    material.emissiveIntensity = object.emissiveIntensity
+    material.side = MATERIAL_SIDE[object.side]
+    material.opacity = object.opacity
+    // `transparent` is derived, not a separate stored field — three.js only
+    // sorts/blends objects as transparent when this is explicitly true, so
+    // opacity < 1 alone would render a see-through object as if opaque
+    // (visible artifacts at edges, no blending with what's behind it).
+    material.transparent = object.opacity < 1
+    material.depthWrite = object.opacity >= 1
+  }, [material, object.color, object.emissiveColor, object.emissiveIntensity, object.side, object.opacity])
+
+  // `wireframe`/`flatShading` change which shader variant the material
+  // compiles to, and so does crossing the transparent/opaque boundary above —
+  // plain property assignment updates the flags but doesn't know to force a
+  // recompile, so the old compiled pipeline keeps rendering until
+  // `needsUpdate` is set explicitly (materialType itself doesn't need this:
+  // it gets a brand new instance from the useMemo above, not a flag flip).
+  useEffect(() => {
+    material.wireframe = object.wireframe
+    // MeshToonNodeMaterial (unlike the other 4 shading models) has no
+    // `flatShading` — toon shading is always faceted via its gradient map,
+    // so this is simply a no-op expando assignment for that one material
+    // type, same as the old JSX version silently ignored the prop there too.
+    ;(material as NodeMaterial & { flatShading?: boolean }).flatShading = object.flatShading
+    material.needsUpdate = true
+  }, [material, object.wireframe, object.flatShading, object.opacity < 1])
+
+  return <primitive object={material} attach="material" />
 }
 
 function shadowProps(mode: ShadowMode) {
@@ -128,6 +215,15 @@ function Geometry({ kind }: { kind: SceneObject['kind'] }) {
 // raycasting ignores `visible` — doesn't stop it from being hit-tested, so
 // it works as a pure invisible pick proxy without any extra plumbing.
 const LIGHT_PICK_RADIUS_SCALE = 3
+
+// Matches the scene's own always-on directional light (Editor3D.tsx) — that
+// light was tuned with these exact values to avoid shadow acne, but
+// light-objects had no bias correction at all until now (three.js defaults
+// both to 0), so they were more prone to acne than the scene light. Not
+// exposed in the Inspector — same reasoning as the scene light: not worth a
+// per-light UI control unless acne actually shows up visibly for someone.
+const LIGHT_SHADOW_NORMAL_BIAS = 0.03
+const LIGHT_SHADOW_BIAS = -0.0005
 
 // Unit cone "cross + circle" wireframe, same construction three.js's own
 // SpotLightHelper uses (see node_modules/three/src/helpers/SpotLightHelper.js)
@@ -222,13 +318,11 @@ const DIRECTIONAL_PREVIEW_LENGTH = 3
 // meaningful "scale" in our data model.
 function LightIcon({
   object,
-  isSelected,
   gizmosVisible,
   onPointerDown,
   onPointerUp,
 }: {
   object: SceneObject
-  isSelected: boolean
   gizmosVisible: boolean
   onPointerDown: (e: ThreeEvent<PointerEvent>) => void
   onPointerUp: (e: ThreeEvent<PointerEvent>) => void
@@ -240,7 +334,30 @@ function LightIcon({
   // renders for a given object, so reusing the same target ref is safe.
   const targetRef = useRef<Object3D>(null)
   const radius = PRIMITIVE_BASE_SIZE[object.kind][0] / 2
-  const gizmoColor = isSelected ? '#3a6df0' : object.color
+  // Selection is indicated by SelectionOutline (the blue box), not by
+  // recoloring the icon — tinting this the same blue used to mask the
+  // light's own configured color while adjusting it in the Inspector,
+  // exactly the same problem the mesh Material component had.
+  const gizmoColor = object.color
+
+  // Adaptive shadow-camera framing for directional light-objects, same
+  // technique as the scene's own always-on directional light (Editor3D.tsx)
+  // — without this, `object.shadowSize` was a fixed frustum that could clip
+  // shadows once objects moved far enough from the origin, unlike the scene
+  // light. `object.shadowSize` becomes the floor `computeShadowRadius` never
+  // shrinks below, rather than the sole value — the user's own "Tamanho"
+  // slider still does something once the scene auto-grows past it. Kept out
+  // of the light's remount `key` below on purpose: unlike `shadowResolution`/
+  // `shadowSize` changing (a deliberate, rare edit that needs a fresh shadow
+  // map texture), this recomputes continuously as objects move — the scene
+  // light already proves camera-frustum bounds are safe to update live,
+  // reactively, without remounting, so there's no need to pay for a full
+  // light remount on every object drag elsewhere in the scene.
+  const objects = useEditorStore((s) => s.objects)
+  const directionalShadowRadius = useMemo(
+    () => computeShadowRadius(objects, object.shadowSize),
+    [objects, object.shadowSize],
+  )
 
   // Re-runs after the light element below remounts too (see the `key` prop
   // on each light, keyed by shadowResolution) — otherwise a fresh light
@@ -311,6 +428,8 @@ function LightIcon({
           castShadow={object.castLightShadow}
           shadow-mapSize={[shadowMapSize, shadowMapSize]}
           shadow-radius={shadowRadius}
+          shadow-normalBias={LIGHT_SHADOW_NORMAL_BIAS}
+          shadow-bias={LIGHT_SHADOW_BIAS}
         />
       )}
       {object.kind === 'spotLight' && (
@@ -327,6 +446,8 @@ function LightIcon({
             castShadow={object.castLightShadow}
             shadow-mapSize={[shadowMapSize, shadowMapSize]}
             shadow-radius={shadowRadius}
+            shadow-normalBias={LIGHT_SHADOW_NORMAL_BIAS}
+            shadow-bias={LIGHT_SHADOW_BIAS}
           />
           {/* Spot points from the light toward this target; parented here so
               it inherits the mesh's rotation — rotation 0 points straight
@@ -350,10 +471,15 @@ function LightIcon({
       {object.kind === 'directionalLight' && (
         <>
           <directionalLight
-            // Also remount on shadowSize changes — like mapSize above, the
-            // shadow camera's frustum is set up once from these values, so
-            // resizing it live is unreliable (see the pointLight key comment
-            // for the full story on why this fixes a real WebGPU error).
+            // Also remount when the user's own shadowSize (the floor —
+            // see directionalShadowRadius above) changes — like mapSize
+            // above, resizing that live is unreliable (see the pointLight
+            // key comment for the full story on why this fixes a real
+            // WebGPU error). NOT keyed on directionalShadowRadius itself —
+            // that recomputes continuously as any object in the scene
+            // moves, and the scene's own directional light already proves
+            // shadow-camera-left/right/top/bottom are safe to update live
+            // without a remount.
             key={`${object.shadowResolution}-${object.shadowSize}`}
             ref={dirRef}
             color={object.color}
@@ -361,10 +487,12 @@ function LightIcon({
             castShadow={object.castLightShadow}
             shadow-mapSize={[shadowMapSize, shadowMapSize]}
             shadow-radius={shadowRadius}
-            shadow-camera-left={-object.shadowSize}
-            shadow-camera-right={object.shadowSize}
-            shadow-camera-top={object.shadowSize}
-            shadow-camera-bottom={-object.shadowSize}
+            shadow-camera-left={-directionalShadowRadius}
+            shadow-camera-right={directionalShadowRadius}
+            shadow-camera-top={directionalShadowRadius}
+            shadow-camera-bottom={-directionalShadowRadius}
+            shadow-normalBias={LIGHT_SHADOW_NORMAL_BIAS}
+            shadow-bias={LIGHT_SHADOW_BIAS}
           />
           {/* Same target-follows-rotation trick as the spot light above —
               rotation 0 points straight down. */}
@@ -394,27 +522,16 @@ function LightIcon({
 
 export const SceneObjectMesh = forwardRef<Mesh, { object: SceneObject }>(
   function SceneObjectMesh({ object }, ref) {
-    const selectedId = useEditorStore((s) => s.selectedId)
     const select = useEditorStore((s) => s.select)
     const group = useEditorStore((s) =>
       object.groupId ? s.groups.find((g) => g.id === object.groupId) : undefined,
     )
     const lightGizmosVisible = useEditorStore((s) => s.lightGizmosVisible)
-    const isSelected = selectedId === object.id
 
     const { onPointerDown, onPointerUp } = usePointerClick((e: ThreeEvent<PointerEvent>) => {
       e.stopPropagation()
       select(object.id)
     })
-
-    // `wireframe`/`flatShading` change which shader variant the material
-    // compiles to — R3F's generic prop-setting updates the flags but doesn't
-    // know to force a recompile, so the old compiled pipeline keeps
-    // rendering until `needsUpdate` is set explicitly.
-    const materialRef = useRef<AnyMeshMaterial>(null)
-    useEffect(() => {
-      if (materialRef.current) materialRef.current.needsUpdate = true
-    }, [object.wireframe, object.flatShading, object.materialType])
 
     // Three.js raycasting ignores `visible` (only rendering respects it), so
     // a hidden object would still be clickable/draggable if just toggled via
@@ -436,7 +553,6 @@ export const SceneObjectMesh = forwardRef<Mesh, { object: SceneObject }>(
         >
           <LightIcon
             object={object}
-            isSelected={isSelected}
             gizmosVisible={lightGizmosVisible}
             onPointerDown={onPointerDown}
             onPointerUp={onPointerUp}
@@ -457,7 +573,7 @@ export const SceneObjectMesh = forwardRef<Mesh, { object: SceneObject }>(
         onPointerUp={onPointerUp}
       >
         <Geometry kind={object.kind} />
-        <Material object={object} isSelected={isSelected} materialRef={materialRef} />
+        <Material object={object} />
       </mesh>
     )
   },

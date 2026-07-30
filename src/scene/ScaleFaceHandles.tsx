@@ -2,7 +2,7 @@ import { useMemo, useRef } from 'react'
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { Group, Mesh, Plane, Quaternion, Raycaster, Vector2, Vector3 } from 'three'
 import type { SceneObject } from '../types'
-import { PRIMITIVE_BASE_SIZE, SELECTION_OUTLINE_PADDING } from './primitives'
+import { PRIMITIVE_BASE_SIZE, SELECTION_OUTLINE_MARGIN } from './primitives'
 
 // Loftcraft-style face handles: unlike the built-in axis gizmo (which grows
 // an object symmetrically around its center pivot), dragging one of these
@@ -76,16 +76,16 @@ export function ScaleFaceHandles({
     group.position.copy(mesh.position)
     group.quaternion.copy(mesh.quaternion)
 
+    // Fixed world-space margin added to each dimension (not a percentage —
+    // see SELECTION_OUTLINE_MARGIN), matching the selection box's own sizing
+    // in SelectionOutline.tsx so handles stay flush on it regardless of the
+    // object's own scale.
     const fullExtent = [
-      baseHalf[0] * 2 * SELECTION_OUTLINE_PADDING * mesh.scale.x,
-      baseHalf[1] * 2 * SELECTION_OUTLINE_PADDING * mesh.scale.y,
-      baseHalf[2] * 2 * SELECTION_OUTLINE_PADDING * mesh.scale.z,
+      baseHalf[0] * 2 * mesh.scale.x + SELECTION_OUTLINE_MARGIN,
+      baseHalf[1] * 2 * mesh.scale.y + SELECTION_OUTLINE_MARGIN,
+      baseHalf[2] * 2 * mesh.scale.z + SELECTION_OUTLINE_MARGIN,
     ]
-    const halfExtent = [
-      baseHalf[0] * SELECTION_OUTLINE_PADDING * mesh.scale.x,
-      baseHalf[1] * SELECTION_OUTLINE_PADDING * mesh.scale.y,
-      baseHalf[2] * SELECTION_OUTLINE_PADDING * mesh.scale.z,
-    ]
+    const halfExtent = [fullExtent[0] / 2, fullExtent[1] / 2, fullExtent[2] / 2]
 
     for (const face of FACES) {
       const handle = handleRefs.current[face.name]
