@@ -1,5 +1,5 @@
 import { useEditorStore } from '../state/useEditorStore'
-import { SegmentedControl } from './Inspector'
+import { SegmentedControl, SliderField } from './Inspector'
 import type { GridStyle } from '../types'
 
 const CSM_OPTIONS = [
@@ -39,25 +39,47 @@ export function SceneInspector() {
         </div>
         <div className="field-row">
           <span className="field-label">Ambiente</span>
-          <input
-            type="number"
+          <SliderField
+            max={5}
             step={0.1}
-            min={0}
             value={sceneSettings.ambientIntensity}
-            onChange={(e) =>
-              updateSceneSettings({ ambientIntensity: Math.max(0, Number(e.target.value)) })
+            onChange={(ambientIntensity) =>
+              updateSceneSettings({ ambientIntensity: Math.max(0, ambientIntensity) })
             }
           />
         </div>
         <div className="field-row">
           <span className="field-label">Direcional</span>
-          <input
-            type="number"
+          <SliderField
+            max={10}
             step={0.1}
-            min={0}
             value={sceneSettings.directionalIntensity}
-            onChange={(e) =>
-              updateSceneSettings({ directionalIntensity: Math.max(0, Number(e.target.value)) })
+            onChange={(directionalIntensity) =>
+              updateSceneSettings({ directionalIntensity: Math.max(0, directionalIntensity) })
+            }
+          />
+        </div>
+        <div className="field-row">
+          <span className="field-label">Elevação do sol</span>
+          <SliderField
+            min={0}
+            max={90}
+            step={0.5}
+            value={sceneSettings.sunElevation}
+            onChange={(sunElevation) =>
+              updateSceneSettings({ sunElevation: Math.min(90, Math.max(0, sunElevation)) })
+            }
+          />
+        </div>
+        <div className="field-row">
+          <span className="field-label">Azimute do sol</span>
+          <SliderField
+            min={-180}
+            max={180}
+            step={0.5}
+            value={sceneSettings.sunAzimuth}
+            onChange={(sunAzimuth) =>
+              updateSceneSettings({ sunAzimuth: Math.min(180, Math.max(-180, sunAzimuth)) })
             }
           />
         </div>
@@ -70,14 +92,24 @@ export function SceneInspector() {
           />
         </div>
         <div className="field-row">
+          <span className="field-label">Suavidade da sombra</span>
+          <SliderField
+            max={10}
+            step={0.5}
+            value={sceneSettings.sunShadowBlur}
+            onChange={(sunShadowBlur) =>
+              updateSceneSettings({ sunShadowBlur: Math.max(0, sunShadowBlur) })
+            }
+          />
+        </div>
+        <div className="field-row">
           <span className="field-label">Exposição</span>
-          <input
-            type="number"
+          <SliderField
+            max={3}
             step={0.05}
-            min={0}
             value={sceneSettings.toneMappingExposure}
-            onChange={(e) =>
-              updateSceneSettings({ toneMappingExposure: Math.max(0, Number(e.target.value)) })
+            onChange={(toneMappingExposure) =>
+              updateSceneSettings({ toneMappingExposure: Math.max(0, toneMappingExposure) })
             }
           />
         </div>

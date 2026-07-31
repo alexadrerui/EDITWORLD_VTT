@@ -2,6 +2,8 @@ import { create } from 'zustand'
 import type {
   AssetBrowserTab,
   AxisView,
+  CustomAsset,
+  CustomAssetPart,
   GizmoSpace,
   GraphicsQuality,
   GridStyle,
@@ -23,6 +25,11 @@ const DEFAULT_SCENE_SETTINGS: SceneSettings = {
   directionalIntensity: 3,
   toneMappingExposure: 1,
   csmEnabled: false,
+  sunShadowBlur: 1,
+  // Matches the old fixed directionalLight position ([10, 15, 5]) so
+  // existing saved scenes keep the same shadow direction after migration.
+  sunElevation: 53.3,
+  sunAzimuth: 63.4,
 }
 
 const INDEX_KEY = 'editworld-vtt:scenes'
@@ -52,6 +59,25 @@ function loadScenesIndex(): SceneMeta[] {
 
 function saveScenesIndex(index: SceneMeta[]) {
   localStorage.setItem(INDEX_KEY, JSON.stringify(index))
+}
+
+// Custom (photo-imported placeholder) assets, see ImportStudio.tsx — a
+// global library like scenesIndex, not per-scene content, so it persists
+// immediately on every mutation instead of waiting for the scene's own
+// "Salvar".
+const CUSTOM_ASSETS_KEY = 'editworld-vtt:custom-assets'
+
+function loadCustomAssets(): CustomAsset[] {
+  try {
+    const raw = localStorage.getItem(CUSTOM_ASSETS_KEY)
+    return raw ? (JSON.parse(raw) as CustomAsset[]) : []
+  } catch {
+    return []
+  }
+}
+
+function saveCustomAssets(assets: CustomAsset[]) {
+  localStorage.setItem(CUSTOM_ASSETS_KEY, JSON.stringify(assets))
 }
 
 interface SceneData {
@@ -85,6 +111,8 @@ function loadSceneData(id: string): SceneData {
           emissiveColor: '#000000',
           emissiveIntensity: 0,
           opacity: 1,
+          roughness: 1,
+          metalness: 0,
           ...LIGHT_DEFAULTS,
           ...o,
         }) as SceneObject,
@@ -159,6 +187,8 @@ function createPrimitive(kind: PrimitiveKind): SceneObject {
     emissiveColor: '#000000',
     emissiveIntensity: 0,
     opacity: 1,
+    roughness: 1,
+    metalness: 0,
     ...LIGHT_DEFAULTS,
     // Directional lights have no distance falloff, so the shared light
     // intensity default (tuned for point/spot) would be blindingly bright.
@@ -175,6 +205,7 @@ const initialSceneId = (() => {
   return fallback
 })()
 const initialSceneData = loadSceneData(initialSceneId)
+const initialCustomAssets = loadCustomAssets()
 
 interface EditorState {
   scenesIndex: SceneMeta[]
@@ -204,6 +235,10 @@ interface EditorState {
   inspectorVisible: boolean
   undoStack: HistoryEntry[]
   redoStack: HistoryEntry[]
+  customAssets: CustomAsset[]
+  addCustomAsset: (asset: { name: string; parts: CustomAssetPart[] }) => void
+  removeCustomAsset: (id: string) => void
+  instantiateCustomAsset: (id: string) => void
   addObject: (kind: PrimitiveKind) => void
   removeObject: (id: string) => void
   updateObject: (id: string, patch: Partial<SceneObject>) => void
@@ -269,6 +304,52 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   inspectorVisible: true,
   undoStack: [],
   redoStack: [],
+  customAssets: initialCustomAssets,
+
+  addCustomAsset: (asset) => {
+    const customAsset: CustomAsset = { id: genId('asset'), createdAt: Date.now(), ...asset }
+    const customAssets = [...get().customAssets, customAsset]
+    saveCustomAssets(customAssets)
+    set({ customAssets })
+  },
+
+  removeCustomAsset: (id) => {
+    const customAssets = get().customAssets.filter((a) => a.id !== id)
+    saveCustomAssets(customAssets)
+    set({ customAssets })
+  },
+
+  // Expands a stored template into real SceneObjects (one box per part,
+  // sharing a new SceneGroup) — scene content like any other add, so it goes
+  // through isDirty/undo like addObject/createGroup instead of the immediate
+  // localStorage writes above.
+  instantiateCustomAsset: (id) =>
+    set((state) => {
+      const asset = state.customAssets.find((a) => a.id === id)
+      if (!asset || asset.parts.length === 0) return {}
+      const group: SceneGroup = { id: genId('group'), name: asset.name, locked: false, hidden: false }
+      let undoStack = state.undoStack
+      const newObjects = asset.parts.map((part, i) => {
+        const obj: SceneObject = {
+          ...createPrimitive('box'),
+          name: part.name,
+          color: part.color,
+          position: part.position,
+          scale: part.scale,
+          groupId: group.id,
+        }
+        undoStack = pushHistory(undoStack, { type: 'add', object: obj, index: state.objects.length + i })
+        return obj
+      })
+      return {
+        groups: [...state.groups, group],
+        objects: [...state.objects, ...newObjects],
+        selectedId: newObjects[0].id,
+        isDirty: true,
+        undoStack,
+        redoStack: [],
+      }
+    }),
 
   addObject: (kind) =>
     set((state) => {

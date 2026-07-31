@@ -1,20 +1,21 @@
 import { useEffect, useMemo, useRef, type RefObject } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { OrbitControls } from '@react-three/drei'
+import { OrbitControls } from '@react-three/drei/core/OrbitControls'
 import {
   Color,
   type DirectionalLight,
   NeutralToneMapping,
+  NoToneMapping,
   OrthographicCamera,
   PerspectiveCamera,
   Vector3,
 } from 'three'
-import { emissive, mrt, output, pass, vec4 } from 'three/tsl'
+import { emissive, mrt, output, pass, renderOutput, vec4 } from 'three/tsl'
 import { bloom } from 'three/addons/tsl/display/BloomNode.js'
 import { CSMShadowNode } from 'three/addons/csm/CSMShadowNode.js'
 import { BlendMode, NormalBlending, RenderPipeline, UnsignedByteType, WebGPURenderer } from 'three/webgpu'
 import { Ground } from './Ground'
-import { computeShadowRadius, PRIMITIVE_BASE_SIZE } from './primitives'
+import { computeShadowRadius, computeSunPosition, PRIMITIVE_BASE_SIZE } from './primitives'
 import { SceneObjects } from './SceneObjects'
 import { useEditorStore } from '../state/useEditorStore'
 import type { AxisView } from '../types'
@@ -58,7 +59,19 @@ function BloomPipeline() {
     // `RenderPipeline` only works with WebGPURenderer (see Editor3D.tsx's
     // renderer factory) — same renderer this project already commits to.
     const pipeline = new RenderPipeline(gl as unknown as WebGPURenderer)
-    pipeline.outputNode = colorPass.add(bloomPass)
+    // RenderPipeline's default (outputColorTransform = true) tone-maps
+    // colorPass.add(bloomPass) as one combined value at the very end — so
+    // the scene's "Exposição" slider (ToneMappingExposure below) was scaling
+    // bloom's glow right along with the beauty image. Apply tone
+    // mapping/exposure to colorPass alone, then add bloom (still
+    // colorspace-converted via NoToneMapping so it isn't washed out/miscolored,
+    // just skipping the exposure-driven tone curve) on top, so bloom strength
+    // stays constant regardless of scene exposure. Doc'd pattern for manual
+    // control: RenderOutputNode.js's own class comment.
+    pipeline.outputColorTransform = false
+    const toneMappedColor = renderOutput(colorPass, gl.toneMapping, gl.outputColorSpace)
+    const gammaBloom = renderOutput(bloomPass, NoToneMapping, gl.outputColorSpace)
+    pipeline.outputNode = toneMappedColor.add(gammaBloom)
     return pipeline
   }, [scene, camera, gl])
 
@@ -392,6 +405,10 @@ export function Editor3D() {
     () => computeShadowRadius(objects, DEFAULT_SHADOW_RADIUS),
     [objects],
   )
+  const sunPosition = useMemo(
+    () => computeSunPosition(sceneSettings.sunElevation, sceneSettings.sunAzimuth),
+    [sceneSettings.sunElevation, sceneSettings.sunAzimuth],
+  )
   const shadowMapSize = quality === 'high' ? 2048 : 1024
   // Shadows off entirely at "Qualidade: Baixa" (shadows={false} below) — CSM
   // would have nothing to render against, so it never activates in that case
@@ -447,7 +464,7 @@ export function Editor3D() {
       <ambientLight intensity={sceneSettings.ambientIntensity} />
       <directionalLight
         ref={sunRef}
-        position={[10, 15, 5]}
+        position={sunPosition}
         intensity={sceneSettings.directionalIntensity}
         castShadow
         shadow-mapSize={[shadowMapSize, shadowMapSize]}
@@ -455,6 +472,7 @@ export function Editor3D() {
         shadow-camera-right={shadowRadius}
         shadow-camera-top={shadowRadius}
         shadow-camera-bottom={-shadowRadius}
+        shadow-radius={sceneSettings.sunShadowBlur}
         shadow-normalBias={0.03}
         shadow-bias={-0.0005}
       />

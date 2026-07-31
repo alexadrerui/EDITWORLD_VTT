@@ -130,6 +130,7 @@ function Material({ object }: { object: SceneObject }) {
   // (there's no declarative JSX prop-diffing for a `<primitive>`-attached
   // material, so this has to be done imperatively).
   const material = useMemo(() => new MATERIAL_CLASS[object.materialType](), [object.materialType])
+  const isTransparent = object.opacity < 1
 
   // Dispose the GPU-side resources of the outgoing instance, whether it's
   // being replaced by a materialType change or the object itself is removed.
@@ -149,9 +150,27 @@ function Material({ object }: { object: SceneObject }) {
     // sorts/blends objects as transparent when this is explicitly true, so
     // opacity < 1 alone would render a see-through object as if opaque
     // (visible artifacts at edges, no blending with what's behind it).
-    material.transparent = object.opacity < 1
-    material.depthWrite = object.opacity >= 1
-  }, [material, object.color, object.emissiveColor, object.emissiveIntensity, object.side, object.opacity])
+    material.transparent = isTransparent
+    material.depthWrite = !isTransparent
+    // No-op expando assignment for 'lambert'/'phong'/'toon' (same as
+    // `flatShading` below) — those material classes have no roughness/
+    // metalness concept, so this only actually does something for
+    // 'standard'/'physical'.
+    ;(material as NodeMaterial & { roughness?: number; metalness?: number }).roughness =
+      object.roughness
+    ;(material as NodeMaterial & { roughness?: number; metalness?: number }).metalness =
+      object.metalness
+  }, [
+    material,
+    object.color,
+    object.emissiveColor,
+    object.emissiveIntensity,
+    object.side,
+    object.opacity,
+    object.roughness,
+    object.metalness,
+    isTransparent,
+  ])
 
   // `wireframe`/`flatShading` change which shader variant the material
   // compiles to, and so does crossing the transparent/opaque boundary above —
@@ -167,7 +186,7 @@ function Material({ object }: { object: SceneObject }) {
     // type, same as the old JSX version silently ignored the prop there too.
     ;(material as NodeMaterial & { flatShading?: boolean }).flatShading = object.flatShading
     material.needsUpdate = true
-  }, [material, object.wireframe, object.flatShading, object.opacity < 1])
+  }, [material, object.wireframe, object.flatShading, isTransparent])
 
   return <primitive object={material} attach="material" />
 }

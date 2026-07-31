@@ -8,6 +8,16 @@
   font-family: system-ui, sans-serif;
 }
 
+.viewport-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #aab0bb;
+  font-size: 14px;
+  letter-spacing: 0.01em;
+}
+
 /* Top floating pill toolbar (Spline-style) — centered over the viewport,
    same visual language as .snap-bar/.floating-panel: blurred dark pill,
    transparent icon/text buttons, dividers between logical groups. */
@@ -1262,4 +1272,348 @@ button.asset-tile.active {
 
 .modal-actions button.danger:hover {
   background: #d64535;
+}
+
+/* "Importar objeto por foto" tile (ObjectsTab in AssetBrowser.tsx) — dashed
+   like .asset-tile-mock but a real, clickable trigger (not a placeholder
+   card), so it gets the accent color instead of dimmed opacity. */
+.asset-tile-import {
+  border-style: dashed;
+  border-color: #3a6df0;
+  color: #3a6df0;
+}
+
+.asset-tile-import .asset-tile-icon {
+  color: #3a6df0;
+}
+
+.asset-tile-import:hover {
+  background: #202839;
+}
+
+.asset-tile-custom {
+  overflow: visible;
+  padding: 0;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.asset-tile-custom:hover {
+  background: #2c3038;
+  border-color: #454b56;
+}
+
+.asset-tile-hit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  padding: 12px 6px;
+  cursor: pointer;
+}
+
+.asset-tile-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  background: #2c3038;
+  border: 1px solid #33373f;
+  border-radius: 999px;
+  color: #565b66;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.asset-tile-remove:hover {
+  background: #c0392b;
+  border-color: #c0392b;
+  color: #fff;
+}
+
+.asset-file-input {
+  display: none;
+}
+
+/* Full-screen "object studio" (ImportStudio.tsx) — a separate mode that
+   takes over the whole viewport, not another floating panel, so it gets its
+   own top-level overlay instead of reusing .floating-panel/.modal. Layout
+   modeled on the reference: top bar (name + Cancelar/Salvar), left tool
+   rail, center viewport, right multi-section inspector. */
+.import-studio {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  background: #14161a;
+  color: #e4e6eb;
+}
+
+.import-studio-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  height: 52px;
+  padding: 0 16px;
+  border-bottom: 1px solid #2a2e35;
+  background: rgba(26, 29, 34, 0.92);
+}
+
+.import-studio-name {
+  background: transparent;
+  border: none;
+  color: #e4e6eb;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 4px 6px;
+  border-radius: 4px;
+  min-width: 0;
+  flex: 1;
+  max-width: 320px;
+}
+
+.import-studio-name:hover,
+.import-studio-name:focus {
+  background: #23262d;
+  outline: none;
+}
+
+.import-studio-topbar-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.import-studio-topbar-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 5px;
+  padding: 7px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.import-studio-cancel {
+  background: #23262d;
+  color: #e4e6eb;
+  border: 1px solid #33373f;
+}
+
+.import-studio-cancel:hover {
+  background: #2c3038;
+}
+
+.import-studio-save {
+  background: #3a6df0;
+  color: #fff;
+  border: 1px solid #3a6df0;
+}
+
+.import-studio-save:hover:not(:disabled) {
+  background: #2f5cd0;
+}
+
+.import-studio-save:disabled {
+  background: #2c3038;
+  border-color: #33373f;
+  color: #565b66;
+  cursor: not-allowed;
+}
+
+.import-studio-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.import-studio-toolbar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 68px;
+  flex-shrink: 0;
+  padding: 14px 8px;
+  border-right: 1px solid #2a2e35;
+}
+
+.import-studio-toolbar button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 4px;
+  color: #8a8f98;
+  font-size: 10px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.import-studio-toolbar button:hover:not(:disabled) {
+  background: #23262d;
+  color: #e4e6eb;
+}
+
+.import-studio-toolbar button.active {
+  background: #2c3038;
+  color: #3a6df0;
+}
+
+.import-studio-toolbar button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.import-studio-viewport {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.import-studio-viewport canvas {
+  display: block;
+}
+
+.import-studio-loading {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #565b66;
+  font-size: 13px;
+}
+
+.import-studio-hint {
+  position: absolute;
+  bottom: 12px;
+  left: 16px;
+  font-size: 11px;
+  color: #565b66;
+  pointer-events: none;
+}
+
+.import-studio-panel {
+  width: 260px;
+  flex-shrink: 0;
+  padding: 16px;
+  overflow-y: auto;
+  border-left: 1px solid #2a2e35;
+  background: rgba(26, 29, 34, 0.6);
+}
+
+.import-studio-panel section {
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #2a2e35;
+}
+
+.import-studio-panel section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.import-studio-panel h4 {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #8a8f98;
+}
+
+.import-studio-panel > section > button {
+  width: 100%;
+  background: #23262d;
+  color: #e4e6eb;
+  border: 1px solid #33373f;
+  border-radius: 5px;
+  padding: 7px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.import-studio-panel > section > button:hover {
+  background: #2c3038;
+}
+
+.import-studio-view-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.import-studio-view-grid button {
+  background: #23262d;
+  color: #e4e6eb;
+  border: 1px solid #33373f;
+  border-radius: 5px;
+  padding: 7px 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.import-studio-view-grid button:hover {
+  background: #2c3038;
+}
+
+.import-studio-selected-part {
+  display: flex;
+  gap: 8px;
+}
+
+.import-studio-part-name {
+  flex: 1;
+  min-width: 0;
+  background: #23262d;
+  border: 1px solid #33373f;
+  border-radius: 4px;
+  color: #e4e6eb;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.import-studio-selected-part input[type='color'] {
+  width: 34px;
+  flex-shrink: 0;
+  background: #23262d;
+  border: 1px solid #33373f;
+  border-radius: 4px;
+  padding: 2px;
+}
+
+.import-studio-empty {
+  margin: 0;
+  color: #565b66;
+  font-size: 13px;
+}
+
+.import-studio-stats {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: #c9cdd4;
+  line-height: 1.5;
+}
+
+.import-studio-disclaimer {
+  margin: 0;
+  font-size: 11px;
+  color: #565b66;
+  line-height: 1.5;
 }

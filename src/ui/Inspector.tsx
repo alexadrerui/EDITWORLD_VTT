@@ -102,7 +102,7 @@ export function SegmentedControl<T extends string>({
 // (Intensity/Distance/Angle/etc. all use this single merged control instead
 // of a bare number input). `max` is just the slider's drag range — typing
 // directly in the number half still accepts any value beyond it.
-function SliderField({
+export function SliderField({
   value,
   min = 0,
   max,
@@ -644,6 +644,35 @@ export function Inspector() {
             onChange={(materialType) => updateObject(object.id, { materialType })}
           />
         </div>
+        {/* Meaningless for 'lambert'/'phong'/'toon' — those shading models
+            have no roughness/metalness concept (see types.ts) — hidden
+            instead of shown-but-inert. */}
+        {(object.materialType === 'standard' || object.materialType === 'physical') && (
+          <>
+            <div className="field-row">
+              <span className="field-label">Rugosidade</span>
+              <SliderField
+                max={1}
+                step={0.01}
+                value={object.roughness}
+                onChange={(roughness) =>
+                  updateObject(object.id, { roughness: Math.min(1, Math.max(0, roughness)) })
+                }
+              />
+            </div>
+            <div className="field-row">
+              <span className="field-label">Metalicidade</span>
+              <SliderField
+                max={1}
+                step={0.01}
+                value={object.metalness}
+                onChange={(metalness) =>
+                  updateObject(object.id, { metalness: Math.min(1, Math.max(0, metalness)) })
+                }
+              />
+            </div>
+          </>
+        )}
         <div className="field-row">
           <span className="field-label">Opacidade</span>
           <SliderField

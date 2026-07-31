@@ -1,14 +1,9 @@
-import { Boxes, Check, ChevronDown, ChevronUp, Image, Layers, Store } from 'lucide-react'
+import { useRef, useState, type ChangeEvent } from 'react'
+import { Boxes, Check, ChevronDown, ChevronUp, ImagePlus, Image, Layers, Store, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useEditorStore } from '../state/useEditorStore'
-import { PRIMITIVE_ICON, PRIMITIVE_LABEL, isLightKind } from '../scene/primitives'
-import type { AssetBrowserTab, PrimitiveKind } from '../types'
-
-// Mesh primitives only — lights already have their own "Adicionar luz" menu
-// in Toolbar.tsx, same split kept here.
-const MESH_KINDS = (Object.keys(PRIMITIVE_LABEL) as PrimitiveKind[]).filter(
-  (kind) => !isLightKind(kind),
-)
+import { ImportStudio } from './ImportStudio'
+import type { AssetBrowserTab } from '../types'
 
 const TABS: { value: AssetBrowserTab; label: string; icon: LucideIcon }[] = [
   { value: 'scenes', label: 'Cenas', icon: Layers },
@@ -54,22 +49,61 @@ function ScenesTab() {
 }
 
 function ObjectsTab() {
-  const addObject = useEditorStore((s) => s.addObject)
+  const customAssets = useEditorStore((s) => s.customAssets)
+  const instantiateCustomAsset = useEditorStore((s) => s.instantiateCustomAsset)
+  const removeCustomAsset = useEditorStore((s) => s.removeCustomAsset)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [pendingFile, setPendingFile] = useState<File | null>(null)
 
+  const handleFileChosen = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = '' // allow picking the exact same file again later
+    if (file) setPendingFile(file)
+  }
+
+  // Built-in primitives (Cubo/Esfera/etc.) live only in the toolbar's
+  // "Adicionar objeto" dropdown (Toolbar.tsx) — this tab is reserved for
+  // actual assets (photo-imported placeholders), not the base shapes.
   return (
-    <div className="asset-grid">
-      {MESH_KINDS.map((kind) => {
-        const Icon = PRIMITIVE_ICON[kind]
-        return (
-          <button key={kind} className="asset-tile" onClick={() => addObject(kind)}>
-            <span className="asset-tile-icon">
-              <Icon size={22} />
-            </span>
-            <span className="asset-tile-label">{PRIMITIVE_LABEL[kind]}</span>
-          </button>
-        )
-      })}
-    </div>
+    <>
+      <div className="asset-grid">
+        {customAssets.map((asset) => (
+          // A <button> can't contain another <button> (invalid HTML — the
+          // browser silently closes the outer one early, breaking both
+          // click handling and the :hover-reveal CSS below). Wrapper stays a
+          // plain <div>; the two buttons (instantiate / remove) are siblings.
+          <div key={asset.id} className="asset-tile asset-tile-custom">
+            <button className="asset-tile-hit" onClick={() => instantiateCustomAsset(asset.id)}>
+              <span className="asset-tile-icon">
+                <Boxes size={22} />
+              </span>
+              <span className="asset-tile-label">{asset.name}</span>
+            </button>
+            <button
+              className="asset-tile-remove"
+              title="Remover do Asset Store"
+              onClick={() => removeCustomAsset(asset.id)}
+            >
+              <X size={11} />
+            </button>
+          </div>
+        ))}
+        <button className="asset-tile asset-tile-import" onClick={() => fileInputRef.current?.click()}>
+          <span className="asset-tile-icon">
+            <ImagePlus size={22} />
+          </span>
+          <span className="asset-tile-label">Importar por foto</span>
+        </button>
+      </div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="asset-file-input"
+        onChange={handleFileChosen}
+      />
+      {pendingFile && <ImportStudio file={pendingFile} onClose={() => setPendingFile(null)} />}
+    </>
   )
 }
 

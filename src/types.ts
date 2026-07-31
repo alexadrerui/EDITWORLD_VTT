@@ -55,6 +55,16 @@ export interface SceneObject {
   side: MaterialSide
   shadowMode: ShadowMode
   materialType: MaterialType
+  // PBR channels, matching three.js's MeshStandardMaterial/MeshPhysicalMaterial
+  // defaults exactly (roughness 1 = fully matte, metalness 0 = fully
+  // dielectric) so existing saved objects keep rendering identically.
+  // Meaningless for 'lambert'/'phong'/'toon' (those shading models have no
+  // roughness/metalness concept) — Inspector.tsx only shows these fields for
+  // 'standard'/'physical'; SceneObjectMesh.tsx still assigns them
+  // unconditionally since it's a harmless no-op property on the other
+  // material classes.
+  roughness: number
+  metalness: number
   // Selective bloom (see BloomPipeline in Editor3D.tsx): only objects with
   // emissiveIntensity > 0 glow — the rest of the scene is untouched, unlike
   // a scene-wide brightness-threshold bloom. Black/0 by default (no glow).
@@ -119,6 +129,19 @@ export interface SceneSettings {
   // cascade passes), only worth it once a scene is big enough that the sun's
   // shadow visibly looks blocky.
   csmEnabled: boolean
+  // Blur radius applied to the sun's shadow map edges (three.js
+  // `shadow.radius`) — same knob light-objects already expose via
+  // shadowBlur/shadowPenumbra (Inspector.tsx), but for the scene's own
+  // always-on directional light. Propagates automatically to CSM cascades
+  // since SunCSM builds each one via `light.shadow.clone()`.
+  sunShadowBlur: number
+  // Sun elevation/azimuth in degrees (see computeSunPosition in
+  // primitives.ts) — drives the scene's directional light position, so its
+  // shadow direction/length actually changes instead of staying fixed.
+  // Same convention as three.js's Sky/SkyMesh examples (0-90 elevation,
+  // -180..180 azimuth) so a future sky shader can reuse these same fields.
+  sunElevation: number
+  sunAzimuth: number
 }
 
 export type TransformMode = 'translate' | 'rotate' | 'scale' | 'scaleFree'
@@ -160,3 +183,26 @@ export type AxisView = 'front' | 'back' | 'top' | 'left' | 'right'
 // "Project Folder" — see AssetBrowser.tsx), adapted to concepts that
 // actually exist in this project (no Scripts/Particles/Materials-as-asset).
 export type AssetBrowserTab = 'scenes' | 'objects' | 'textures' | 'store'
+
+// One box part of a user-imported placeholder object (see ImportStudio.tsx).
+// Deliberately NOT the full SceneObject shape — this is a small, storable
+// template; `instantiateCustomAsset` (useEditorStore.ts) expands each part
+// into a real SceneObject (box primitive) when dropped into a scene.
+export interface CustomAssetPart {
+  name: string
+  color: string
+  position: [number, number, number]
+  scale: [number, number, number]
+}
+
+// A placeholder object built from a reference photo's dominant colors (see
+// ImportStudio.tsx and colorExtraction.ts) — NOT a real AI reconstruction,
+// see the studio's own MODEL panel disclaimer. Stored globally (its own
+// localStorage key, not per-scene) so it shows up in the Asset Store's
+// "Objetos" tab across every scene, same as the built-in primitives.
+export interface CustomAsset {
+  id: string
+  name: string
+  parts: CustomAssetPart[]
+  createdAt: number
+}

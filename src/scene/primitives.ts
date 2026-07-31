@@ -150,6 +150,32 @@ export function computeShadowRadius(objects: SceneObject[], minRadius: number): 
   return maxReach * SHADOW_RADIUS_MARGIN
 }
 
+// Default distance of the scene's own sun from the origin — independent of
+// SHADOW_RADIUS's frustum sizing (that only sets the orthographic shadow
+// camera's left/right/top/bottom planes, not the light's actual position).
+// Just needs to stay comfortably inside the shadow camera's default near/far
+// (0.5/500) at any elevation/azimuth.
+const SUN_DISTANCE = 30
+
+// Sun position from elevation/azimuth (degrees), matching three.js's own
+// webgl_shaders_sky.html / webgpu_sky.html examples
+// (`sun.setFromSphericalCoords(1, degToRad(90 - elevation), degToRad(azimuth))`)
+// so the same two sliders that would drive a sky shader also drive this
+// project's actual shadow-casting directional light — the scene's sun
+// (Editor3D.tsx) no longer sits at a fixed position, so its shadow direction
+// changes instead of staying static regardless of what SceneInspector's
+// "Elevação"/"Azimute" fields are set to.
+export function computeSunPosition(elevationDeg: number, azimuthDeg: number): [number, number, number] {
+  const phi = ((90 - elevationDeg) * Math.PI) / 180
+  const theta = (azimuthDeg * Math.PI) / 180
+  const sinPhi = Math.sin(phi)
+  return [
+    SUN_DISTANCE * sinPhi * Math.sin(theta),
+    SUN_DISTANCE * Math.cos(phi),
+    SUN_DISTANCE * sinPhi * Math.cos(theta),
+  ]
+}
+
 // How much bigger than the object the selection outline is drawn (see
 // SelectionOutline.tsx) — a fixed world-space margin (meters), not a
 // percentage. A percentage-based padding made the visual gap balloon on
