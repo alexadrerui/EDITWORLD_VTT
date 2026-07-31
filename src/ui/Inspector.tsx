@@ -705,6 +705,45 @@ export function Inspector() {
         </div>
       </div>
 
+      {/* Procedural weathering (img2threejs skill's "localOverrides" idea) —
+          triplanar world-space noise in buildWeatheringNode
+          (SceneObjectMesh.tsx), works on any primitive without UVs. Two
+          independent sliders since dirt and wear read as different things:
+          dirt darkens top-facing surfaces, wear lightens edges/corners. */}
+      <div className="field-section-label">Desgaste</div>
+      <div className="selection-fields">
+        <div className="field-row">
+          <span className="field-label">Sujeira</span>
+          <SliderField
+            max={1}
+            step={0.01}
+            value={object.dirtAmount}
+            onChange={(dirtAmount) =>
+              updateObject(object.id, { dirtAmount: Math.min(1, Math.max(0, dirtAmount)) })
+            }
+          />
+        </div>
+        <div className="field-row">
+          <span className="field-label">Desbotado</span>
+          <SliderField
+            max={1}
+            step={0.01}
+            value={object.wearAmount}
+            onChange={(wearAmount) =>
+              updateObject(object.id, { wearAmount: Math.min(1, Math.max(0, wearAmount)) })
+            }
+          />
+        </div>
+        <div className="field-row">
+          <span className="field-label">Cor do desgaste</span>
+          <input
+            type="color"
+            value={object.weatheringColor}
+            onChange={(e) => updateObject(object.id, { weatheringColor: e.target.value })}
+          />
+        </div>
+      </div>
+
       <div className="field-section-label">Visibilidade</div>
       <div className="selection-fields">
         <div className="field-row">

@@ -150,6 +150,28 @@ export function computeShadowRadius(objects: SceneObject[], minRadius: number): 
   return maxReach * SHADOW_RADIUS_MARGIN
 }
 
+// How many shadow-map texels of normalBias to apply — enough to push the
+// sampled depth past self-shadowing "acne" on a grazing-angle surface,
+// without pushing it so far the shadow visibly detaches from the object's
+// own base ("peter-panning" — a fixed bias in world units doesn't scale
+// with either the frustum size or the map resolution, so an amount tuned
+// for one combination is wrong for others; this project's shadow frustums
+// are dynamic (computeShadowRadius above), so the old fixed constant was
+// only ever correct by accident at the scale it was originally tuned at).
+const NORMAL_BIAS_TEXELS = 1
+const MIN_NORMAL_BIAS = 0.002
+
+// `frustumSize`: full width/height of the (square, orthographic) shadow
+// camera frustum in world units — `2 * shadowRadius` for the scene sun and
+// directional light-objects. For point/spot lights (perspective, no single
+// frustum width), pass an approximate "reach" instead (e.g. the light's own
+// `lightDistance`) — not exact for a perspective projection, but still
+// scales the bias in the right direction instead of a constant that's
+// wrong at every distance.
+export function computeNormalBias(frustumSize: number, mapSize: number): number {
+  return Math.max(MIN_NORMAL_BIAS, (frustumSize / mapSize) * NORMAL_BIAS_TEXELS)
+}
+
 // Default distance of the scene's own sun from the origin — independent of
 // SHADOW_RADIUS's frustum sizing (that only sets the orthographic shadow
 // camera's left/right/top/bottom planes, not the light's actual position).

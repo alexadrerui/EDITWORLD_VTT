@@ -113,6 +113,9 @@ function loadSceneData(id: string): SceneData {
           opacity: 1,
           roughness: 1,
           metalness: 0,
+          dirtAmount: 0,
+          wearAmount: 0,
+          weatheringColor: '#2b2118',
           ...LIGHT_DEFAULTS,
           ...o,
         }) as SceneObject,
@@ -189,6 +192,9 @@ function createPrimitive(kind: PrimitiveKind): SceneObject {
     opacity: 1,
     roughness: 1,
     metalness: 0,
+    dirtAmount: 0,
+    wearAmount: 0,
+    weatheringColor: '#2b2118',
     ...LIGHT_DEFAULTS,
     // Directional lights have no distance falloff, so the shared light
     // intensity default (tuned for point/spot) would be blindingly bright.

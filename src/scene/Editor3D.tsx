@@ -15,7 +15,12 @@ import { bloom } from 'three/addons/tsl/display/BloomNode.js'
 import { CSMShadowNode } from 'three/addons/csm/CSMShadowNode.js'
 import { BlendMode, NormalBlending, RenderPipeline, UnsignedByteType, WebGPURenderer } from 'three/webgpu'
 import { Ground } from './Ground'
-import { computeShadowRadius, computeSunPosition, PRIMITIVE_BASE_SIZE } from './primitives'
+import {
+  computeNormalBias,
+  computeShadowRadius,
+  computeSunPosition,
+  PRIMITIVE_BASE_SIZE,
+} from './primitives'
 import { SceneObjects } from './SceneObjects'
 import { useEditorStore } from '../state/useEditorStore'
 import type { AxisView } from '../types'
@@ -410,6 +415,13 @@ export function Editor3D() {
     [sceneSettings.sunElevation, sceneSettings.sunAzimuth],
   )
   const shadowMapSize = quality === 'high' ? 2048 : 1024
+  // Texel-proportional normalBias (see computeNormalBias in primitives.ts) —
+  // was a fixed 0.03 world units, tuned by eye once against this default
+  // small-scene frustum; that same absolute gap reads as "shadow floats
+  // above the object" (peter-panning) once you zoom in or work with an
+  // object smaller than the frustum it was tuned for, since it doesn't
+  // scale with either the frustum size or the map resolution.
+  const sunNormalBias = computeNormalBias(shadowRadius * 2, shadowMapSize)
   // Shadows off entirely at "Qualidade: Baixa" (shadows={false} below) — CSM
   // would have nothing to render against, so it never activates in that case
   // regardless of the scene's own csmEnabled toggle.
@@ -473,7 +485,7 @@ export function Editor3D() {
         shadow-camera-top={shadowRadius}
         shadow-camera-bottom={-shadowRadius}
         shadow-radius={sceneSettings.sunShadowBlur}
-        shadow-normalBias={0.03}
+        shadow-normalBias={sunNormalBias}
         shadow-bias={-0.0005}
       />
 

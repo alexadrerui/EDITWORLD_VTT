@@ -65,6 +65,20 @@ export interface SceneObject {
   // material classes.
   roughness: number
   metalness: number
+  // Procedural weathering (img2threejs skill's "localOverrides" concept:
+  // dirt/wear as local material overrides, not a separate baked texture) —
+  // see buildWeatheringNode in SceneObjectMesh.tsx. Triplanar world-space
+  // noise, so it works on any primitive without needing UVs. `dirtAmount`
+  // darkens/tints upward-facing surfaces (dust settles on top, not on
+  // vertical/underside faces); `wearAmount` (Inspector label "Desbotado")
+  // lightens/desaturates in scattered patches — the skill's "fadedMask"
+  // (sun-bleaching). Not edge/corner-specific: this project's primitives
+  // give every face unshared vertex normals, so there's no real curvature
+  // signal to detect edges from without mesh analysis this project doesn't
+  // have. Both 0 by default (no visual change until the user dials them in).
+  dirtAmount: number
+  wearAmount: number
+  weatheringColor: string
   // Selective bloom (see BloomPipeline in Editor3D.tsx): only objects with
   // emissiveIntensity > 0 glow — the rest of the scene is untouched, unlike
   // a scene-wide brightness-threshold bloom. Black/0 by default (no glow).

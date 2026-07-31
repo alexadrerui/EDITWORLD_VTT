@@ -3,6 +3,7 @@ import type { ThreeEvent } from '@react-three/fiber'
 import {
   BackSide,
   BufferGeometry,
+  Color,
   type DirectionalLight,
   DoubleSide,
   Float32BufferAttribute,
@@ -21,11 +22,28 @@ import {
   MeshToonNodeMaterial,
   type NodeMaterial,
 } from 'three/webgpu'
-import { Fn, mix, reference, vec3, vec4 } from 'three/tsl'
+import {
+  clamp,
+  Fn,
+  mix,
+  mx_fractal_noise_float,
+  normalWorld,
+  positionWorld,
+  reference,
+  smoothstep,
+  vec3,
+  vec4,
+} from 'three/tsl'
 import type { MaterialSide, MaterialType, SceneObject, ShadowMode } from '../types'
 import { useEditorStore } from '../state/useEditorStore'
 import { usePointerClick } from './usePointerClick'
-import { computeShadowRadius, isLightKind, PRIMITIVE_BASE_SIZE, SHADOW_MAP_SIZE } from './primitives'
+import {
+  computeNormalBias,
+  computeShadowRadius,
+  isLightKind,
+  PRIMITIVE_BASE_SIZE,
+  SHADOW_MAP_SIZE,
+} from './primitives'
 
 const MATERIAL_SIDE: Record<MaterialSide, Side> = {
   front: FrontSide,
@@ -124,6 +142,79 @@ function buildOpacityShadowNode(material: NodeMaterial) {
   })()
 }
 
+// World-space noise frequency for dirt patches — tuned by eye against the
+// primitives' default size (~1 unit): high enough that a 1-unit face shows
+// several scattered specks/patches rather than one smooth blob, not tied to
+// any per-object scale, so patch size stays consistent as an object scales.
+const DIRT_NOISE_SCALE = 5
+// Coarser than dirt (bigger, softer patches) and offset so the two patterns
+// don't perfectly overlap — reads as two separate weathering effects
+// instead of one mask reused twice.
+const FADE_NOISE_SCALE = 2.5
+const FADE_NOISE_OFFSET = vec3(37.1, 91.7, 12.3)
+
+// Procedural weathering (img2threejs skill's "localOverrides": dirt/wear as
+// local material overrides rather than a separate texture) — triplanar
+// world-space noise instead of UV-based, so it works on any primitive
+// (including ones with no meaningful UV layout, like a torus knot) without
+// extra setup. Two independent effects, matching the skill's guidance that
+// dirt and fading read as different phenomena, not one slider:
+//   - dirtAmount: darkens/tints upward-facing surfaces where noise peaks
+//     (dust accumulates on top-facing areas, not on vertical/underside
+//     faces — cheap stand-in for the skill's "cavityBias").
+//   - wearAmount: lightens/desaturates surfaces in scattered patches (the
+//     skill's "fadedMask" — sun-bleaching, not edge-only wear), same noise
+//     technique as dirt but its own frequency/offset and no up-facing bias.
+//     A first version tried highlighting geometric edges/corners instead
+//     (screen-space normal derivatives, then an object-space
+//     abs(normalWorld) triplanar-blend proxy) — both failed for this
+//     project's actual geometry: BoxGeometry (and the other primitives)
+//     give every face its own unshared vertex normals, so there is no
+//     fragment where the normal is ever "between" two faces to detect an
+//     edge from — the derivative approach was real but only ever 1 screen
+//     pixel wide, and the triplanar proxy was mathematically zero
+//     everywhere. Real edge/corner wear would need actual mesh curvature
+//     analysis (bevel geometry or per-vertex curvature data), which this
+//     project has no pipeline for — the noise-based fade below is the
+//     honest, working substitute.
+// Built once per material instance (paired with the castShadowNode setup
+// below) and read live via `reference()`, same pattern as
+// buildOpacityShadowNode — updating the expando properties in the Material
+// effect below is enough, no node-graph rebuild needed.
+type WeatheredMaterial = NodeMaterial & {
+  dirtAmount?: number
+  wearAmount?: number
+  weatheringColor?: Color
+}
+
+function buildWeatheringNode(material: NodeMaterial) {
+  const baseColor = reference('color', 'color', material)
+  const dirtAmount = reference('dirtAmount', 'float', material)
+  const wearAmount = reference('wearAmount', 'float', material)
+  const weatheringColor = reference('weatheringColor', 'color', material)
+  return Fn(() => {
+    const dirtNoise = mx_fractal_noise_float(positionWorld.mul(DIRT_NOISE_SCALE), 3, 2.0, 0.5)
+      .mul(0.5)
+      .add(0.5)
+    const upFacing = clamp(normalWorld.y, 0, 1)
+    const dirtMask = smoothstep(0.4, 0.7, dirtNoise).mul(upFacing).mul(dirtAmount)
+
+    const fadeNoise = mx_fractal_noise_float(
+      positionWorld.mul(FADE_NOISE_SCALE).add(FADE_NOISE_OFFSET),
+      2,
+      2.0,
+      0.5,
+    )
+      .mul(0.5)
+      .add(0.5)
+    const fadeMask = smoothstep(0.5, 0.75, fadeNoise).mul(wearAmount)
+
+    const dirtied = mix(baseColor, weatheringColor, dirtMask)
+    const faded = mix(dirtied, dirtied.add(vec3(0.35)).clamp(0, 1), fadeMask)
+    return faded
+  })()
+}
+
 function Material({ object }: { object: SceneObject }) {
   // Rebuilt only when the shading model itself changes — everything else is
   // applied onto the same instance below via plain property assignment
@@ -138,6 +229,12 @@ function Material({ object }: { object: SceneObject }) {
 
   useEffect(() => {
     material.castShadowNode = buildOpacityShadowNode(material)
+    // Own Color instance for the expando `weatheringColor` property
+    // buildWeatheringNode's `reference('weatheringColor', 'color', ...)`
+    // reads live — same idea as the material's own built-in `color`/
+    // `emissive` Color instances, just not a real Material property.
+    ;(material as WeatheredMaterial).weatheringColor = new Color()
+    material.colorNode = buildWeatheringNode(material)
   }, [material])
 
   useEffect(() => {
@@ -160,6 +257,12 @@ function Material({ object }: { object: SceneObject }) {
       object.roughness
     ;(material as NodeMaterial & { roughness?: number; metalness?: number }).metalness =
       object.metalness
+    // Weathering — see buildWeatheringNode. Plain property writes; the node
+    // graph built above reads them live via reference(), no rebuild needed.
+    const weathered = material as WeatheredMaterial
+    weathered.dirtAmount = object.dirtAmount
+    weathered.wearAmount = object.wearAmount
+    weathered.weatheringColor?.set(object.weatheringColor)
   }, [
     material,
     object.color,
@@ -169,6 +272,9 @@ function Material({ object }: { object: SceneObject }) {
     object.opacity,
     object.roughness,
     object.metalness,
+    object.dirtAmount,
+    object.wearAmount,
+    object.weatheringColor,
     isTransparent,
   ])
 
@@ -235,13 +341,13 @@ function Geometry({ kind }: { kind: SceneObject['kind'] }) {
 // it works as a pure invisible pick proxy without any extra plumbing.
 const LIGHT_PICK_RADIUS_SCALE = 3
 
-// Matches the scene's own always-on directional light (Editor3D.tsx) — that
-// light was tuned with these exact values to avoid shadow acne, but
-// light-objects had no bias correction at all until now (three.js defaults
-// both to 0), so they were more prone to acne than the scene light. Not
-// exposed in the Inspector — same reasoning as the scene light: not worth a
-// per-light UI control unless acne actually shows up visibly for someone.
-const LIGHT_SHADOW_NORMAL_BIAS = 0.03
+// Fixed depth bias — unlike normalBias (see computeNormalBias in
+// primitives.ts), this is a small, scale-independent correction for raw
+// depth-buffer quantization error, not something that visibly detaches a
+// shadow from its object when too large, so it doesn't need texel-scaling.
+// Not exposed in the Inspector — same reasoning as the scene light: not
+// worth a per-light UI control unless acne actually shows up visibly for
+// someone.
 const LIGHT_SHADOW_BIAS = -0.0005
 
 // Unit cone "cross + circle" wireframe, same construction three.js's own
@@ -410,6 +516,22 @@ function LightIcon({
       ? object.shadowBlur
       : object.shadowBlur * (1 + object.shadowPenumbra)
 
+  // Texel-proportional normalBias (see computeNormalBias in primitives.ts) —
+  // point/spot have no single orthographic frustum width like the
+  // directional cases do, so their "frustum size" is approximated from the
+  // light's own reach (`lightDistance`, floored so an unbounded-falloff
+  // light — distance 0 — doesn't collapse the bias to ~0). Point lights
+  // shadow via 90°-FOV cubemap faces (tan(45°) = 1, so reach alone already
+  // matches `2 * distance * tan(fov/2)`); spot lights fold in their actual
+  // cone angle.
+  const lightReach = Math.max(object.lightDistance, 5)
+  const pointNormalBias = computeNormalBias(lightReach * 2, shadowMapSize)
+  const spotNormalBias = computeNormalBias(
+    lightReach * 2 * Math.tan(object.lightAngle),
+    shadowMapSize,
+  )
+  const directionalNormalBias = computeNormalBias(directionalShadowRadius * 2, shadowMapSize)
+
   return (
     <>
       {/* Gated by the "Esconder ícones de luz" toggle in SnapBar.tsx — the
@@ -447,7 +569,7 @@ function LightIcon({
           castShadow={object.castLightShadow}
           shadow-mapSize={[shadowMapSize, shadowMapSize]}
           shadow-radius={shadowRadius}
-          shadow-normalBias={LIGHT_SHADOW_NORMAL_BIAS}
+          shadow-normalBias={pointNormalBias}
           shadow-bias={LIGHT_SHADOW_BIAS}
         />
       )}
@@ -465,7 +587,7 @@ function LightIcon({
             castShadow={object.castLightShadow}
             shadow-mapSize={[shadowMapSize, shadowMapSize]}
             shadow-radius={shadowRadius}
-            shadow-normalBias={LIGHT_SHADOW_NORMAL_BIAS}
+            shadow-normalBias={spotNormalBias}
             shadow-bias={LIGHT_SHADOW_BIAS}
           />
           {/* Spot points from the light toward this target; parented here so
@@ -510,7 +632,7 @@ function LightIcon({
             shadow-camera-right={directionalShadowRadius}
             shadow-camera-top={directionalShadowRadius}
             shadow-camera-bottom={-directionalShadowRadius}
-            shadow-normalBias={LIGHT_SHADOW_NORMAL_BIAS}
+            shadow-normalBias={directionalNormalBias}
             shadow-bias={LIGHT_SHADOW_BIAS}
           />
           {/* Same target-follows-rotation trick as the spot light above —
