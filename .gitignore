@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local Claude/Cursor skill installs — .cursor/skills/img2threejs is a full
+# cloned git repo (has its own .git/), not project source. Committing it
+# would add a broken embedded-repo gitlink (no .gitmodules), not real files.
+.cursor/

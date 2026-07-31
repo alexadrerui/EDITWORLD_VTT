@@ -7,11 +7,16 @@ Construída com Vite + React + TypeScript + Three.js (via [react-three-fiber](ht
 ## Funcionalidades
 
 - Viewport 3D com grid, iluminação e sombras
-- Adição de primitivas (cubo, esfera, cilindro, cone, placa) via menu
+- Adição de primitivas (cubo, esfera, cilindro, cone, placa, torus, pirâmide, icosaedro, dodecaedro, nó de torus)
+- Adição de luzes como objetos de cena (point/spot/directional)
 - Seleção de objetos (clique na cena ou na lista de hierarquia)
 - Gizmo de transformação: mover, rotacionar, escalar
-- Inspetor com edição de nome, posição, rotação, escala e cor
+- Inspetor com edição de nome, posição, rotação, escala, materiais e opacidade
+- Modo de câmera perspectiva/ortográfica + vistas rápidas por eixo
+- Undo/redo para alterações de conteúdo
+- Agrupamento visual de objetos na hierarquia
 - Múltiplas cenas, com troca via dropdown e criação de novas cenas
+- Configuração de cena (fundo, luz ambiente/direcional, exposição, CSM)
 - Salvamento manual da cena atual (persistida no `localStorage` do navegador)
 
 ## Pré-requisitos
@@ -37,6 +42,12 @@ Abra [http://localhost:5173](http://localhost:5173) no navegador. O Vite recarre
 # build de produção (gera a pasta dist/)
 npm run build
 
+# executar testes
+npm run test
+
+# testes em modo watch
+npm run test:watch
+
 # pré-visualizar o build de produção localmente
 npm run preview
 
@@ -52,11 +63,26 @@ src/
   state/       # Store Zustand (cenas, objetos, seleção, persistência)
   ui/          # Painéis de interface (toolbar, hierarquia, inspetor)
   types.ts     # Tipos compartilhados
+tests/         # Testes automatizados (Vitest)
+docs/          # Guias de fluxo e referência do projeto
 ```
 
 ## Persistência
 
 As cenas são salvas no `localStorage` do navegador ao clicar em **Salvar** na toolbar. Trocar de cena sem salvar exibe um aviso, já que as alterações não salvas são descartadas da memória ao carregar outra cena.
+
+## Engenharia e qualidade
+
+- CI em GitHub Actions para `lint`, `test` e `build` em push/PR
+- Testes iniciais de store cobrindo inicialização, migração de save legado e fluxo de undo/redo
+- Template de PR com checklist técnico + checklist `/img2threejs` em `.github/pull_request_template.md`
+
+## Workflow com `/img2threejs`
+
+O projeto inclui o skill em `.cursor/skills/img2threejs` e um guia de uso adaptado ao editor:
+
+- `docs/img2threejs-workflow.md`
+- Inclui também um perfil de validação de sombras (seção **Shadow QA Profile** no mesmo guia)
 
 ## Licença
 

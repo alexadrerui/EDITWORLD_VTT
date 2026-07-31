@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { TransformControls } from '@react-three/drei'
+import { TransformControls } from '@react-three/drei/core/TransformControls'
 import type { Mesh } from 'three'
 import { useEditorStore } from '../state/useEditorStore'
 import { isLightKind } from './primitives'
