@@ -38,7 +38,8 @@ function patchFreeScaleGizmoVisibility(controls: any) {
 export function SceneObjects({ orbitControlsRef }: { orbitControlsRef: React.RefObject<any> }) {
   const objects = useEditorStore((s) => s.objects)
   const groups = useEditorStore((s) => s.groups)
-  const selectedId = useEditorStore((s) => s.selectedId)
+  const selectedIds = useEditorStore((s) => s.selectedIds)
+  const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
   const transformMode = useEditorStore((s) => s.transformMode)
   const updateObject = useEditorStore((s) => s.updateObject)
   const positionSnap = useEditorStore((s) => s.positionSnap)
@@ -91,9 +92,12 @@ export function SceneObjects({ orbitControlsRef }: { orbitControlsRef: React.Ref
         <SceneObjectMesh key={object.id} object={object} ref={getRefCallback(object.id)} />
       ))}
 
-      {selectedMesh && selectedObject && (
-        <SelectionOutline mesh={selectedMesh} object={selectedObject} />
-      )}
+      {selectedIds.map((id) => {
+        const mesh = meshRefs.current.get(id)
+        const object = objects.find((o) => o.id === id)
+        if (!mesh || !object) return null
+        return <SelectionOutline key={id} mesh={mesh} object={object} />
+      })}
 
       {selectedMesh && selectedObject && !selectedLocked && effectiveTransformMode === 'scale' && (
         <ScaleFaceHandles

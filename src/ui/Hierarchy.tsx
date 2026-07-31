@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react'
+import { Fragment, useState, type MouseEvent } from 'react'
 import {
   Check,
   ChevronDown,
@@ -148,7 +148,7 @@ function ObjectRow({
   selected: boolean
   isEditing: boolean
   draftName: string
-  onSelect: () => void
+  onSelect: (e: MouseEvent) => void
   onStartRename: () => void
   onDraftChange: (value: string) => void
   onCommitRename: () => void
@@ -226,8 +226,9 @@ function ObjectRow({
 export function Hierarchy() {
   const objects = useEditorStore((s) => s.objects)
   const groups = useEditorStore((s) => s.groups)
-  const selectedId = useEditorStore((s) => s.selectedId)
+  const selectedIds = useEditorStore((s) => s.selectedIds)
   const select = useEditorStore((s) => s.select)
+  const toggleSelect = useEditorStore((s) => s.toggleSelect)
   const updateObject = useEditorStore((s) => s.updateObject)
   const toggleLocked = useEditorStore((s) => s.toggleLocked)
   const toggleHidden = useEditorStore((s) => s.toggleHidden)
@@ -279,10 +280,13 @@ export function Hierarchy() {
   const objectRowProps = (obj: SceneObject, indent: boolean) => ({
     obj,
     indent,
-    selected: obj.id === selectedId,
+    selected: selectedIds.includes(obj.id),
     isEditing: editingId === obj.id,
     draftName,
-    onSelect: () => select(obj.id),
+    onSelect: (e: MouseEvent) => {
+      if (e.shiftKey || e.ctrlKey || e.metaKey) toggleSelect(obj.id)
+      else select(obj.id)
+    },
     onStartRename: () => startRename(obj.id, obj.name),
     onDraftChange: setDraftName,
     onCommitRename: () => commitObjectRename(obj.id),

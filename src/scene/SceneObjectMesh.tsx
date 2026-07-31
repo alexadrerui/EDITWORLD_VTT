@@ -664,14 +664,20 @@ function LightIcon({
 export const SceneObjectMesh = forwardRef<Mesh, { object: SceneObject }>(
   function SceneObjectMesh({ object }, ref) {
     const select = useEditorStore((s) => s.select)
+    const toggleSelect = useEditorStore((s) => s.toggleSelect)
     const group = useEditorStore((s) =>
       object.groupId ? s.groups.find((g) => g.id === object.groupId) : undefined,
     )
     const lightGizmosVisible = useEditorStore((s) => s.lightGizmosVisible)
 
+    // Shift/Ctrl/Cmd-click adds-or-removes this object from the selection
+    // instead of replacing it — same modifier convention used by the
+    // Hierarchy rows (see Hierarchy.tsx).
     const { onPointerDown, onPointerUp } = usePointerClick((e: ThreeEvent<PointerEvent>) => {
       e.stopPropagation()
-      select(object.id)
+      const native = e.nativeEvent
+      if (native.shiftKey || native.ctrlKey || native.metaKey) toggleSelect(object.id)
+      else select(object.id)
     })
 
     // Three.js raycasting ignores `visible` (only rendering respects it), so

@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { useEditorStore } from '../state/useEditorStore'
 import { isLightKind, PRIMITIVE_BASE_SIZE, PRIMITIVE_LABEL } from '../scene/primitives'
+import { MultiSelectionInspector } from './MultiSelectionInspector'
 import { SceneInspector } from './SceneInspector'
 import { useDropdown } from './useDropdown'
 import type { MaterialSide, MaterialType, SceneObject, ShadowMode, ShadowResolution } from '../types'
@@ -421,7 +422,8 @@ function LightInspector({ object }: { object: SceneObject }) {
 
 export function Inspector() {
   const objects = useEditorStore((s) => s.objects)
-  const selectedId = useEditorStore((s) => s.selectedId)
+  const selectedIds = useEditorStore((s) => s.selectedIds)
+  const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
   const updateObject = useEditorStore((s) => s.updateObject)
   const removeObject = useEditorStore((s) => s.removeObject)
   const transformMode = useEditorStore((s) => s.transformMode)
@@ -489,6 +491,14 @@ export function Inspector() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [object, transformMode, setTransformMode, removeObject, requestCameraFocus])
 
+  if (selectedIds.length > 1) {
+    return (
+      <>
+        {inspectorVisible && <MultiSelectionInspector selectedIds={selectedIds} />}
+        {collapseToggle}
+      </>
+    )
+  }
   if (!object) {
     return (
       <>

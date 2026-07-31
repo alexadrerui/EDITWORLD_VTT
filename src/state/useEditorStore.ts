@@ -144,16 +144,42 @@ function saveSceneData(id: string, data: SceneData) {
 // Group create/remove/rename/assign and lock/hide (both objects and groups)
 // are deliberately left out of history for now, same reasoning as the
 // existing lock/hide exclusion — view/organization state, not content edits.
-type HistoryEntry =
+type SingleHistoryEntry =
   | { type: 'add'; object: SceneObject; index: number }
   | { type: 'remove'; object: SceneObject; index: number }
   | { type: 'update'; id: string; before: Partial<SceneObject>; after: Partial<SceneObject> }
+
+// A 'batch' groups several single entries (e.g. bulk-deleting a multi-
+// selection) so one Ctrl+Z undoes the whole action, not just one object's
+// slice of it — see applyUndoSingle/applyRedoSingle below for how undo/redo
+// iterate a batch's sub-entries.
+type HistoryEntry = SingleHistoryEntry | { type: 'batch'; entries: SingleHistoryEntry[] }
 
 const MAX_HISTORY = 50
 
 function pushHistory(stack: HistoryEntry[], entry: HistoryEntry): HistoryEntry[] {
   const next = [...stack, entry]
   return next.length > MAX_HISTORY ? next.slice(next.length - MAX_HISTORY) : next
+}
+
+function applyUndoSingle(objects: SceneObject[], entry: SingleHistoryEntry): SceneObject[] {
+  if (entry.type === 'add') return objects.filter((o) => o.id !== entry.object.id)
+  if (entry.type === 'remove') {
+    const next = [...objects]
+    next.splice(entry.index, 0, entry.object)
+    return next
+  }
+  return objects.map((o) => (o.id === entry.id ? { ...o, ...entry.before } : o))
+}
+
+function applyRedoSingle(objects: SceneObject[], entry: SingleHistoryEntry): SceneObject[] {
+  if (entry.type === 'add') {
+    const next = [...objects]
+    next.splice(entry.index, 0, entry.object)
+    return next
+  }
+  if (entry.type === 'remove') return objects.filter((o) => o.id !== entry.object.id)
+  return objects.map((o) => (o.id === entry.id ? { ...o, ...entry.after } : o))
 }
 
 let nextObjectId = 1
@@ -219,7 +245,7 @@ interface EditorState {
   objects: SceneObject[]
   groups: SceneGroup[]
   sceneSettings: SceneSettings
-  selectedId: string | null
+  selectedIds: string[]
   transformMode: TransformMode
   isDirty: boolean
   positionSnap: PositionSnapMode
@@ -247,17 +273,22 @@ interface EditorState {
   instantiateCustomAsset: (id: string) => void
   addObject: (kind: PrimitiveKind) => void
   removeObject: (id: string) => void
+  removeObjects: (ids: string[]) => void
   updateObject: (id: string, patch: Partial<SceneObject>) => void
   toggleLocked: (id: string) => void
   toggleHidden: (id: string) => void
+  setObjectsLocked: (ids: string[], locked: boolean) => void
+  setObjectsHidden: (ids: string[], hidden: boolean) => void
   setObjectGroup: (objectId: string, groupId: string | null) => void
   createGroup: () => void
+  groupSelected: () => void
   removeGroup: (id: string) => void
   renameGroup: (id: string, name: string) => void
   toggleGroupLocked: (id: string) => void
   toggleGroupHidden: (id: string) => void
   updateSceneSettings: (patch: Partial<SceneSettings>) => void
   select: (id: string | null) => void
+  toggleSelect: (id: string) => void
   setTransformMode: (mode: TransformMode) => void
   setPositionSnap: (value: PositionSnapMode) => void
   setRotationSnap: (value: number | null) => void
@@ -288,7 +319,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   objects: initialSceneData.objects,
   groups: initialSceneData.groups,
   sceneSettings: initialSceneData.settings,
-  selectedId: null,
+  selectedIds: [],
   transformMode: 'translate',
   isDirty: false,
   positionSnap: null,
@@ -350,7 +381,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       return {
         groups: [...state.groups, group],
         objects: [...state.objects, ...newObjects],
-        selectedId: newObjects[0].id,
+        selectedIds: [newObjects[0].id],
         isDirty: true,
         undoStack,
         redoStack: [],
@@ -363,7 +394,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       const index = state.objects.length
       return {
         objects: [...state.objects, obj],
-        selectedId: obj.id,
+        selectedIds: [obj.id],
         isDirty: true,
         undoStack: pushHistory(state.undoStack, { type: 'add', object: obj, index }),
         redoStack: [],
@@ -377,9 +408,38 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       const object = state.objects[index]
       return {
         objects: state.objects.filter((o) => o.id !== id),
-        selectedId: state.selectedId === id ? null : state.selectedId,
+        selectedIds: state.selectedIds.filter((existing) => existing !== id),
         isDirty: true,
         undoStack: pushHistory(state.undoStack, { type: 'remove', object, index }),
+        redoStack: [],
+      }
+    }),
+
+  // Bulk delete for a multi-selection — removes sequentially from a working
+  // copy so each entry's `index` matches the array state at that point in
+  // the batch (needed for undo to reinsert everything at the right spots,
+  // see applyUndoSingle/the undo/redo batch loop below). One Ctrl+Z undoes
+  // the whole batch.
+  removeObjects: (ids) =>
+    set((state) => {
+      const idSet = new Set(ids)
+      let objects = state.objects
+      const entries: SingleHistoryEntry[] = []
+      for (const id of ids) {
+        const index = objects.findIndex((o) => o.id === id)
+        if (index === -1) continue
+        entries.push({ type: 'remove', object: objects[index], index })
+        objects = objects.filter((o) => o.id !== id)
+      }
+      if (entries.length === 0) return {}
+      return {
+        objects,
+        selectedIds: state.selectedIds.filter((id) => !idSet.has(id)),
+        isDirty: true,
+        undoStack: pushHistory(
+          state.undoStack,
+          entries.length === 1 ? entries[0] : { type: 'batch', entries },
+        ),
         redoStack: [],
       }
     }),
@@ -416,6 +476,28 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       isDirty: true,
     })),
 
+  // Explicit value (not toggle) so a multi-selection with mixed lock/hidden
+  // states lands on one consistent state after a single click, instead of
+  // some objects flipping one way and some the other. Same undo exclusion
+  // as toggleLocked/toggleHidden — view state, not content.
+  setObjectsLocked: (ids, locked) =>
+    set((state) => {
+      const idSet = new Set(ids)
+      return {
+        objects: state.objects.map((o) => (idSet.has(o.id) ? { ...o, locked } : o)),
+        isDirty: true,
+      }
+    }),
+
+  setObjectsHidden: (ids, hidden) =>
+    set((state) => {
+      const idSet = new Set(ids)
+      return {
+        objects: state.objects.map((o) => (idSet.has(o.id) ? { ...o, hidden } : o)),
+        isDirty: true,
+      }
+    }),
+
   setObjectGroup: (objectId, groupId) =>
     set((state) => ({
       objects: state.objects.map((o) => (o.id === objectId ? { ...o, groupId } : o)),
@@ -431,6 +513,25 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         hidden: false,
       }
       return { groups: [...state.groups, group], isDirty: true }
+    }),
+
+  // Same undo exclusion as createGroup/setObjectGroup — organization state,
+  // not content. No-op with an empty selection.
+  groupSelected: () =>
+    set((state) => {
+      if (state.selectedIds.length === 0) return {}
+      const group: SceneGroup = {
+        id: genId('group'),
+        name: `Grupo ${nextGroupId++}`,
+        locked: false,
+        hidden: false,
+      }
+      const idSet = new Set(state.selectedIds)
+      return {
+        groups: [...state.groups, group],
+        objects: state.objects.map((o) => (idSet.has(o.id) ? { ...o, groupId: group.id } : o)),
+        isDirty: true,
+      }
     }),
 
   removeGroup: (id) =>
@@ -471,7 +572,16 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       isDirty: true,
     })),
 
-  select: (id) => set({ selectedId: id }),
+  select: (id) => set({ selectedIds: id ? [id] : [] }),
+  // Shift/Ctrl/Cmd-click add-or-remove, used by both the viewport (see
+  // usePointerClick callers) and the Hierarchy rows — same modifier
+  // convention in both places.
+  toggleSelect: (id) =>
+    set((state) => ({
+      selectedIds: state.selectedIds.includes(id)
+        ? state.selectedIds.filter((existing) => existing !== id)
+        : [...state.selectedIds, id],
+    })),
   setTransformMode: (mode) => set({ transformMode: mode }),
   setPositionSnap: (value) => set({ positionSnap: value }),
   setRotationSnap: (value) => set({ rotationSnap: value }),
@@ -503,33 +613,31 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   toggleInspectorVisible: () =>
     set((state) => ({ inspectorVisible: !state.inspectorVisible })),
 
+  // Batch entries are undone in reverse order of how their sub-entries were
+  // recorded (each 'remove' entry's `index` was captured against the
+  // in-progress working array at that point in the original batch — see
+  // removeObjects above — so reinserting must replay that sequence
+  // backwards, same LIFO principle as the outer undo/redo stacks). A single
+  // entry just runs the loop once, identical to the old behavior.
   undo: () =>
     set((state) => {
       const entry = state.undoStack[state.undoStack.length - 1]
       if (!entry) return {}
       const undoStack = state.undoStack.slice(0, -1)
       const redoStack = [...state.redoStack, entry]
+      const singles = entry.type === 'batch' ? [...entry.entries].reverse() : [entry]
 
-      if (entry.type === 'add') {
-        return {
-          objects: state.objects.filter((o) => o.id !== entry.object.id),
-          selectedId: state.selectedId === entry.object.id ? null : state.selectedId,
-          isDirty: true,
-          undoStack,
-          redoStack,
+      let objects = state.objects
+      let selectedIds = state.selectedIds
+      for (const single of singles) {
+        objects = applyUndoSingle(objects, single)
+        if (single.type === 'add') {
+          selectedIds = selectedIds.filter((id) => id !== single.object.id)
+        } else if (single.type === 'remove') {
+          selectedIds = [...selectedIds, single.object.id]
         }
       }
-      if (entry.type === 'remove') {
-        const objects = [...state.objects]
-        objects.splice(entry.index, 0, entry.object)
-        return { objects, selectedId: entry.object.id, isDirty: true, undoStack, redoStack }
-      }
-      return {
-        objects: state.objects.map((o) => (o.id === entry.id ? { ...o, ...entry.before } : o)),
-        isDirty: true,
-        undoStack,
-        redoStack,
-      }
+      return { objects, selectedIds, isDirty: true, undoStack, redoStack }
     }),
 
   redo: () =>
@@ -538,27 +646,19 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       if (!entry) return {}
       const redoStack = state.redoStack.slice(0, -1)
       const undoStack = [...state.undoStack, entry]
+      const singles = entry.type === 'batch' ? entry.entries : [entry]
 
-      if (entry.type === 'add') {
-        const objects = [...state.objects]
-        objects.splice(entry.index, 0, entry.object)
-        return { objects, selectedId: entry.object.id, isDirty: true, undoStack, redoStack }
-      }
-      if (entry.type === 'remove') {
-        return {
-          objects: state.objects.filter((o) => o.id !== entry.object.id),
-          selectedId: state.selectedId === entry.object.id ? null : state.selectedId,
-          isDirty: true,
-          undoStack,
-          redoStack,
+      let objects = state.objects
+      let selectedIds = state.selectedIds
+      for (const single of singles) {
+        objects = applyRedoSingle(objects, single)
+        if (single.type === 'add') {
+          selectedIds = [...selectedIds, single.object.id]
+        } else if (single.type === 'remove') {
+          selectedIds = selectedIds.filter((id) => id !== single.object.id)
         }
       }
-      return {
-        objects: state.objects.map((o) => (o.id === entry.id ? { ...o, ...entry.after } : o)),
-        isDirty: true,
-        undoStack,
-        redoStack,
-      }
+      return { objects, selectedIds, isDirty: true, undoStack, redoStack }
     }),
 
   saveScene: () => {
@@ -580,7 +680,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       objects: [],
       groups: [],
       sceneSettings: DEFAULT_SCENE_SETTINGS,
-      selectedId: null,
+      selectedIds: [],
       isDirty: false,
       undoStack: [],
       redoStack: [],
@@ -597,7 +697,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       objects: data.objects,
       groups: data.groups,
       sceneSettings: data.settings,
-      selectedId: null,
+      selectedIds: [],
       isDirty: false,
       undoStack: [],
       redoStack: [],
