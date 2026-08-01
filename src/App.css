@@ -1110,6 +1110,30 @@ button.asset-tile:disabled {
   cursor: not-allowed;
 }
 
+.field-hint {
+  padding: 2px 0 10px;
+  font-size: 11px;
+  color: #8a8f98;
+}
+
+.field-hint-error {
+  color: #e2a83a;
+}
+
+/* Read-only variant of .asset-tile for a model's own embedded textures
+   (Inspector's "Texturas do modelo") — not a button, no hover/click affordance. */
+.model-texture-tile {
+  cursor: default;
+}
+
+.model-texture-thumb {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 4px;
+  background: #14161a;
+}
+
 .field-row input[type='number'] {
   width: 0;
   flex: 1;

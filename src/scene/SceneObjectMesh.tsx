@@ -743,7 +743,11 @@ function SoundIcon({
 // permanently if the referenced blob is missing from IndexedDB (deleted, or
 // browser data cleared — see assetStore.ts) — a dashed-looking wireframe box
 // reads as "something's missing" rather than the object silently vanishing.
+// A dimmer neutral gray for the brief 'loading' state keeps it visually
+// distinct from the amber 'error' one (missing/corrupt asset), rather than
+// both looking identically broken while parsing is still in flight.
 const MISSING_ASSET_COLOR = '#e2a83a'
+const LOADING_PLACEHOLDER_COLOR = '#565b66'
 
 function ImportedModelContent({ object }: { object: SceneObject }) {
   const { status, model } = useImportedModel(object.assetId)
@@ -753,7 +757,10 @@ function ImportedModelContent({ object }: { object: SceneObject }) {
   return (
     <mesh>
       <boxGeometry args={[1, 1, 1]} />
-      <meshBasicMaterial color={MISSING_ASSET_COLOR} wireframe />
+      <meshBasicMaterial
+        color={status === 'loading' ? LOADING_PLACEHOLDER_COLOR : MISSING_ASSET_COLOR}
+        wireframe
+      />
     </mesh>
   )
 }

@@ -4,6 +4,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Focus,
+  ImageOff,
   Link2,
   Magnet,
   RotateCw,
@@ -24,7 +25,7 @@ import {
 import { MultiSelectionInspector } from './MultiSelectionInspector'
 import { SceneInspector } from './SceneInspector'
 import { useDropdown } from './useDropdown'
-import { rejectIfNotGlb } from '../scene/assetLoaders'
+import { rejectIfNotGlb, useImportedModel } from '../scene/assetLoaders'
 import type { MaterialSide, MaterialType, SceneObject, ShadowMode, ShadowResolution } from '../types'
 
 function formatMeters(value: number) {
@@ -440,6 +441,12 @@ function ImportedModelInspector({ object }: { object: SceneObject }) {
   const setTransformMode = useEditorStore((s) => s.setTransformMode)
   const requestCameraFocus = useEditorStore((s) => s.requestCameraFocus)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // Same hook SceneObjectMesh.tsx uses to render this object in the
+  // viewport — the model template is cached by assetId (see
+  // loadModelTemplate in assetLoaders.ts), so calling it a second time here
+  // doesn't re-parse the GLB, it just reads the already-resolved textures
+  // list alongside the viewport's own clone.
+  const { status: modelStatus, textures: modelTextures } = useImportedModel(object.assetId)
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -538,7 +545,35 @@ function ImportedModelInspector({ object }: { object: SceneObject }) {
             </span>
           </button>
         </div>
+        {modelStatus === 'error' && (
+          <div className="field-hint field-hint-error">
+            Não foi possível carregar o modelo — o arquivo pode ter sido removido ou estar
+            corrompido. Substitua o arquivo acima.
+          </div>
+        )}
       </div>
+
+      <div className="field-section-label">Texturas do modelo</div>
+      {modelStatus === 'loading' && <div className="field-hint">Carregando modelo…</div>}
+      {modelStatus === 'ready' && modelTextures.length === 0 && (
+        <div className="field-hint">Nenhuma textura incorporada neste modelo.</div>
+      )}
+      {modelStatus === 'ready' && modelTextures.length > 0 && (
+        <div className="asset-grid">
+          {modelTextures.map((tex) => (
+            <div key={tex.id} className="asset-tile model-texture-tile" title={tex.label}>
+              {tex.thumbnail ? (
+                <img className="model-texture-thumb" src={tex.thumbnail} alt={tex.label} />
+              ) : (
+                <span className="asset-tile-icon">
+                  <ImageOff size={22} />
+                </span>
+              )}
+              <span className="asset-tile-label">{tex.label}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
