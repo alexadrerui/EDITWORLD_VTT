@@ -1,5 +1,6 @@
 import {
   Box,
+  Boxes,
   Circle,
   Cone,
   Cylinder,
@@ -12,9 +13,10 @@ import {
   Sun,
   Torus,
   Pyramid,
+  Volume2,
   type LucideIcon,
 } from 'lucide-react'
-import type { LightKind, PrimitiveKind, SceneObject, ShadowResolution } from '../types'
+import type { ImportedKind, LightKind, PrimitiveKind, SceneObject, ShadowResolution } from '../types'
 
 // Bounding-box size (width, height, depth) of each primitive's base geometry
 // at scale [1, 1, 1] — must match the geometry args in SceneObjectMesh.tsx's
@@ -46,6 +48,13 @@ export const PRIMITIVE_BASE_SIZE: Record<PrimitiveKind, [number, number, number]
   pointLight: [0.4, 0.4, 0.4],
   spotLight: [0.4, 0.4, 0.4],
   directionalLight: [0.4, 0.4, 0.4],
+  // Placeholder footprint before the real GLTF bounding box is known (see
+  // useImportedModel in SceneObjectMesh.tsx) — [1,1,1] is a neutral "about
+  // one meter" reference, same spirit as a mesh primitive's own base size.
+  importedModel: [1, 1, 1],
+  // Same small gizmo-icon size as the light kinds above — soundSource has no
+  // real geometry either.
+  soundSource: [0.4, 0.4, 0.4],
 }
 
 export const PRIMITIVE_LABEL: Record<PrimitiveKind, string> = {
@@ -62,6 +71,8 @@ export const PRIMITIVE_LABEL: Record<PrimitiveKind, string> = {
   pointLight: 'Luz de ponto',
   spotLight: 'Luz spot',
   directionalLight: 'Luz direcional',
+  importedModel: 'Modelo importado',
+  soundSource: 'Fonte de som',
 }
 
 // Shared with Hierarchy.tsx and AssetBrowser.tsx so the icon-per-kind mapping
@@ -80,6 +91,8 @@ export const PRIMITIVE_ICON: Record<PrimitiveKind, LucideIcon> = {
   pointLight: Lightbulb,
   spotLight: Spotlight,
   directionalLight: Sun,
+  importedModel: Boxes,
+  soundSource: Volume2,
 }
 
 export const LIGHT_KINDS: LightKind[] = ['pointLight', 'spotLight', 'directionalLight']
@@ -87,6 +100,16 @@ export const LIGHT_KINDS: LightKind[] = ['pointLight', 'spotLight', 'directional
 export function isLightKind(kind: PrimitiveKind): kind is LightKind {
   return kind === 'pointLight' || kind === 'spotLight' || kind === 'directionalLight'
 }
+
+export function isImportedModelKind(kind: PrimitiveKind): kind is 'importedModel' {
+  return kind === 'importedModel'
+}
+
+export function isSoundKind(kind: PrimitiveKind): kind is 'soundSource' {
+  return kind === 'soundSource'
+}
+
+export const IMPORTED_KINDS: ImportedKind[] = ['importedModel', 'soundSource']
 
 // Default light parameters used when a new light object is created (see
 // createPrimitive in useEditorStore.ts) and as the migration default for
@@ -106,6 +129,20 @@ export const LIGHT_DEFAULTS = {
   shadowBlur: 1,
   shadowPenumbra: 0,
   shadowSize: 15,
+}
+
+// Default sound parameters, same role as LIGHT_DEFAULTS above — used both by
+// createPrimitive (new soundSource objects) and loadSceneData's migration
+// (older saves that predate sound/asset fields, including non-sound objects,
+// which just carry these around unused, same convention as light-only
+// fields being unused on meshes). refDistance/maxDistance mirror three.js's
+// PositionalAudio panner defaults (linear rolloff within that range).
+export const SOUND_DEFAULTS = {
+  soundVolume: 1,
+  soundLoop: true,
+  soundRefDistance: 5,
+  soundMaxDistance: 30,
+  autoplayIntent: false,
 }
 
 // Directional lights aren't distance-attenuated, so they need a much lower

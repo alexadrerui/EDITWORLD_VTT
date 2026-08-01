@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { TransformControls } from '@react-three/drei/core/TransformControls'
 import type { Mesh } from 'three'
 import { useEditorStore } from '../state/useEditorStore'
-import { isLightKind } from './primitives'
+import { isLightKind, isSoundKind } from './primitives'
 import { ScaleFaceHandles } from './ScaleFaceHandles'
 import { SceneObjectMesh } from './SceneObjectMesh'
 import { SelectionOutline } from './SelectionOutline'
@@ -77,12 +77,14 @@ export function SceneObjects({ orbitControlsRef }: { orbitControlsRef: React.Ref
     !!selectedObject?.locked ||
     !!groups.find((g) => g.id === selectedObject?.groupId)?.locked
 
-  // Lights have no meaningful "scale" in our data model — fall back to
-  // translate so selecting a light while scale/scaleFree is still the active
-  // mode (carried over from a previously selected mesh) doesn't show a scale
-  // gizmo that would do nothing useful.
+  // Lights and sound sources have no meaningful "scale" in our data model —
+  // fall back to translate so selecting one while scale/scaleFree is still
+  // the active mode (carried over from a previously selected mesh) doesn't
+  // show a scale gizmo that would do nothing useful.
   const effectiveTransformMode =
-    selectedObject && isLightKind(selectedObject.kind) && transformMode !== 'rotate'
+    selectedObject &&
+    (isLightKind(selectedObject.kind) || isSoundKind(selectedObject.kind)) &&
+    transformMode !== 'rotate'
       ? 'translate'
       : transformMode
 

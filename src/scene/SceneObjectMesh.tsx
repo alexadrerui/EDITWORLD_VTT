@@ -10,6 +10,7 @@ import {
   FrontSide,
   type Mesh,
   type Object3D,
+  PositionalAudio,
   type PointLight,
   type Side,
   type SpotLight,
@@ -40,10 +41,14 @@ import { usePointerClick } from './usePointerClick'
 import {
   computeNormalBias,
   computeShadowRadius,
+  isImportedModelKind,
   isLightKind,
+  isSoundKind,
   PRIMITIVE_BASE_SIZE,
   SHADOW_MAP_SIZE,
 } from './primitives'
+import { useAudioBuffer, useImageTexture, useImportedModel, useVideoTexture } from './assetLoaders'
+import { globalAudioListener } from './audioListener'
 
 const MATERIAL_SIDE: Record<MaterialSide, Side> = {
   front: FrontSide,
@@ -223,6 +228,11 @@ function Material({ object }: { object: SceneObject }) {
   const material = useMemo(() => new MATERIAL_CLASS[object.materialType](), [object.materialType])
   const isTransparent = object.opacity < 1
 
+  // videoMapAssetId and colorMapAssetId are mutually exclusive (enforced in
+  // the Inspector UI) — video wins if somehow both are set.
+  const colorMapTexture = useImageTexture(object.colorMapAssetId)
+  const videoMapTexture = useVideoTexture(object.videoMapAssetId)
+
   // Dispose the GPU-side resources of the outgoing instance, whether it's
   // being replaced by a materialType change or the object itself is removed.
   useEffect(() => () => material.dispose(), [material])
@@ -243,6 +253,7 @@ function Material({ object }: { object: SceneObject }) {
     material.emissiveIntensity = object.emissiveIntensity
     material.side = MATERIAL_SIDE[object.side]
     material.opacity = object.opacity
+    material.map = videoMapTexture ?? colorMapTexture ?? null
     // `transparent` is derived, not a separate stored field — three.js only
     // sorts/blends objects as transparent when this is explicitly true, so
     // opacity < 1 alone would render a see-through object as if opaque
@@ -276,6 +287,8 @@ function Material({ object }: { object: SceneObject }) {
     object.wearAmount,
     object.weatheringColor,
     isTransparent,
+    colorMapTexture,
+    videoMapTexture,
   ])
 
   // `wireframe`/`flatShading` change which shader variant the material
@@ -661,10 +674,95 @@ function LightIcon({
   )
 }
 
+// soundSource has no real geometry either, same "small unlit icon mesh"
+// approach as LightIcon above — an octahedron gizmo plus an invisible bigger
+// pick sphere, with a THREE.PositionalAudio node parented under it so the
+// audio's panning follows this object's position for free. Never autoplays
+// on its own (see SOUND_DEFAULTS.autoplayIntent — saved but unused today);
+// the only thing that ever calls .play()/.stop() is the "▶ Testar" button in
+// Inspector.tsx, bridged through the store's testingSoundId (this component
+// lives inside the Canvas tree, the button doesn't).
+function SoundIcon({
+  object,
+  isSelected,
+  gizmosVisible,
+  onPointerDown,
+  onPointerUp,
+}: {
+  object: SceneObject
+  isSelected: boolean
+  gizmosVisible: boolean
+  onPointerDown: (e: ThreeEvent<PointerEvent>) => void
+  onPointerUp: (e: ThreeEvent<PointerEvent>) => void
+}) {
+  const radius = PRIMITIVE_BASE_SIZE[object.kind][0] / 2
+  const gizmoColor = isSelected ? '#3a6df0' : object.color
+  const buffer = useAudioBuffer(object.assetId)
+  const isTesting = useEditorStore((s) => s.testingSoundId === object.id)
+  const audio = useMemo(() => new PositionalAudio(globalAudioListener), [])
+
+  useEffect(() => {
+    if (!buffer) return
+    audio.setBuffer(buffer)
+    audio.setDistanceModel('linear')
+    audio.setLoop(object.soundLoop)
+    audio.setVolume(object.soundVolume)
+    audio.setRefDistance(object.soundRefDistance)
+    audio.setMaxDistance(object.soundMaxDistance)
+  }, [audio, buffer, object.soundLoop, object.soundVolume, object.soundRefDistance, object.soundMaxDistance])
+
+  useEffect(() => {
+    if (!buffer) return
+    if (isTesting && !audio.isPlaying) audio.play()
+    else if (!isTesting && audio.isPlaying) audio.stop()
+  }, [audio, isTesting, buffer])
+
+  // Stop cleanly if the object is deleted (or the asset changes) mid-test,
+  // rather than leaving an orphaned source playing after its node is gone.
+  useEffect(() => () => {
+    if (audio.isPlaying) audio.stop()
+  }, [audio])
+
+  return (
+    <>
+      {gizmosVisible && (
+        <>
+          <octahedronGeometry args={[radius, 0]} />
+          <meshBasicMaterial color={gizmoColor} wireframe />
+          <mesh visible={false} onPointerDown={onPointerDown} onPointerUp={onPointerUp}>
+            <sphereGeometry args={[radius * LIGHT_PICK_RADIUS_SCALE, 8, 6]} />
+          </mesh>
+        </>
+      )}
+      <primitive object={audio} />
+    </>
+  )
+}
+
+// Placeholder shown while a model asset is loading, or in place of it
+// permanently if the referenced blob is missing from IndexedDB (deleted, or
+// browser data cleared — see assetStore.ts) — a dashed-looking wireframe box
+// reads as "something's missing" rather than the object silently vanishing.
+const MISSING_ASSET_COLOR = '#e2a83a'
+
+function ImportedModelContent({ object }: { object: SceneObject }) {
+  const { status, model } = useImportedModel(object.assetId)
+  if (status === 'ready' && model) {
+    return <primitive object={model} />
+  }
+  return (
+    <mesh>
+      <boxGeometry args={[1, 1, 1]} />
+      <meshBasicMaterial color={MISSING_ASSET_COLOR} wireframe />
+    </mesh>
+  )
+}
+
 export const SceneObjectMesh = forwardRef<Mesh, { object: SceneObject }>(
   function SceneObjectMesh({ object }, ref) {
     const select = useEditorStore((s) => s.select)
     const toggleSelect = useEditorStore((s) => s.toggleSelect)
+    const isSelected = useEditorStore((s) => s.selectedIds.includes(object.id))
     const group = useEditorStore((s) =>
       object.groupId ? s.groups.find((g) => g.id === object.groupId) : undefined,
     )
@@ -688,6 +786,22 @@ export const SceneObjectMesh = forwardRef<Mesh, { object: SceneObject }>(
     // owning group cascades the same way, even without real 3D parenting.
     if (object.hidden || group?.hidden) return null
 
+    if (isImportedModelKind(object.kind)) {
+      return (
+        <mesh
+          ref={ref}
+          name={object.id}
+          position={object.position}
+          rotation={object.rotation}
+          scale={object.scale}
+          onPointerDown={onPointerDown}
+          onPointerUp={onPointerUp}
+        >
+          <ImportedModelContent object={object} />
+        </mesh>
+      )
+    }
+
     if (isLightKind(object.kind)) {
       return (
         <mesh
@@ -700,6 +814,30 @@ export const SceneObjectMesh = forwardRef<Mesh, { object: SceneObject }>(
         >
           <LightIcon
             object={object}
+            gizmosVisible={lightGizmosVisible}
+            onPointerDown={onPointerDown}
+            onPointerUp={onPointerUp}
+          />
+        </mesh>
+      )
+    }
+
+    if (isSoundKind(object.kind)) {
+      return (
+        <mesh
+          ref={ref}
+          name={object.id}
+          position={object.position}
+          rotation={object.rotation}
+          onPointerDown={onPointerDown}
+          onPointerUp={onPointerUp}
+        >
+          <SoundIcon
+            object={object}
+            isSelected={isSelected}
+            // Reuses the same "Esconder ícones de luz" toggle as LightIcon —
+            // both are small always-on visual affordances for kinds with no
+            // real geometry, no separate toggle added just for sound icons.
             gizmosVisible={lightGizmosVisible}
             onPointerDown={onPointerDown}
             onPointerUp={onPointerUp}

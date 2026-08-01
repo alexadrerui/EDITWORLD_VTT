@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { useEditorStore } from '../state/useEditorStore'
 import { SegmentedControl, SliderField } from './Inspector'
 import type { GridStyle } from '../types'
@@ -20,6 +21,19 @@ export function SceneInspector() {
   const currentScene = scenesIndex.find((s) => s.id === currentSceneId)
   const gridStyle = useEditorStore((s) => s.gridStyle)
   const setGridStyle = useEditorStore((s) => s.setGridStyle)
+  const assets = useEditorStore((s) => s.assets)
+  const importAudio = useEditorStore((s) => s.importAudio)
+  const testingBackgroundMusic = useEditorStore((s) => s.testingBackgroundMusic)
+  const toggleBackgroundMusicTest = useEditorStore((s) => s.toggleBackgroundMusicTest)
+  const musicInputRef = useRef<HTMLInputElement>(null)
+
+  const handleMusicFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    const meta = await importAudio(file)
+    updateSceneSettings({ backgroundMusicAssetId: meta.id })
+  }
 
   return (
     <div className="floating-panel selection-panel">
@@ -116,6 +130,69 @@ export function SceneInspector() {
         <div className="field-row">
           <span className="field-label">Modelo de grade</span>
           <SegmentedControl options={GRID_STYLE_OPTIONS} value={gridStyle} onChange={setGridStyle} />
+        </div>
+      </div>
+
+      <div className="field-section-label">Música de fundo</div>
+      <div className="selection-fields">
+        <input
+          ref={musicInputRef}
+          type="file"
+          accept="audio/*"
+          style={{ display: 'none' }}
+          onChange={handleMusicFileChange}
+        />
+        <div className="field-row">
+          <span className="field-label">Arquivo</span>
+          <div className="texture-field">
+            {sceneSettings.backgroundMusicAssetId && (
+              <span className="texture-field-name">
+                {assets.find((a) => a.id === sceneSettings.backgroundMusicAssetId)?.name ??
+                  sceneSettings.backgroundMusicAssetId}
+              </span>
+            )}
+            <button onClick={() => musicInputRef.current?.click()}>Escolher arquivo</button>
+            {sceneSettings.backgroundMusicAssetId && (
+              <button onClick={() => updateSceneSettings({ backgroundMusicAssetId: null })}>
+                Remover
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="field-row">
+          <span className="field-label">Volume</span>
+          <input
+            type="number"
+            step={0.05}
+            min={0}
+            max={1}
+            value={sceneSettings.backgroundMusicVolume}
+            onChange={(e) =>
+              updateSceneSettings({
+                backgroundMusicVolume: Math.max(0, Math.min(1, Number(e.target.value))),
+              })
+            }
+          />
+        </div>
+        <div className="field-row">
+          <span className="field-label">Repetir</span>
+          <SegmentedControl
+            options={[
+              { value: 'off', label: 'Não' },
+              { value: 'on', label: 'Sim' },
+            ]}
+            value={sceneSettings.backgroundMusicLoop ? 'on' : 'off'}
+            onChange={(v) => updateSceneSettings({ backgroundMusicLoop: v === 'on' })}
+          />
+        </div>
+        <div className="field-row">
+          <span className="field-label">Pré-visualizar</span>
+          <button
+            className={testingBackgroundMusic ? 'active' : ''}
+            onClick={() => toggleBackgroundMusicTest()}
+          >
+            {testingBackgroundMusic ? '■ Parar' : '▶ Testar'}
+          </button>
         </div>
       </div>
     </div>

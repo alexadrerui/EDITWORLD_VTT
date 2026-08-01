@@ -1,14 +1,32 @@
 import { useRef, useState, type ChangeEvent } from 'react'
-import { Boxes, Check, ChevronDown, ChevronUp, ImagePlus, Image, Layers, Store, X } from 'lucide-react'
+import {
+  Boxes,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Image,
+  ImagePlus,
+  Layers,
+  Package,
+  Plus,
+  Store,
+  Video,
+  Volume2,
+  X,
+} from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useEditorStore } from '../state/useEditorStore'
 import { ImportStudio } from './ImportStudio'
+import { rejectIfNotGlb } from '../scene/assetLoaders'
 import type { AssetBrowserTab } from '../types'
 
 const TABS: { value: AssetBrowserTab; label: string; icon: LucideIcon }[] = [
   { value: 'scenes', label: 'Cenas', icon: Layers },
   { value: 'objects', label: 'Objetos', icon: Boxes },
+  { value: 'models', label: 'Modelos', icon: Package },
   { value: 'textures', label: 'Texturas', icon: Image },
+  { value: 'video', label: 'Vídeo', icon: Video },
+  { value: 'audio', label: 'Áudio', icon: Volume2 },
   { value: 'store', label: 'Asset Store', icon: Store },
 ]
 
@@ -107,8 +125,194 @@ function ObjectsTab() {
   )
 }
 
+function ModelsTab() {
+  const assets = useEditorStore((s) => s.assets)
+  const importModel = useEditorStore((s) => s.importModel)
+  const addObject = useEditorStore((s) => s.addObject)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const modelAssets = assets.filter((a) => a.kind === 'model')
+
+  const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file || !rejectIfNotGlb(file)) return
+    await importModel(file)
+  }
+
+  return (
+    <div className="asset-grid">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".glb"
+        style={{ display: 'none' }}
+        onChange={handleFileChange}
+      />
+      <button className="asset-tile" onClick={() => fileInputRef.current?.click()}>
+        <span className="asset-tile-icon">
+          <Plus size={22} />
+        </span>
+        <span className="asset-tile-label">Importar .glb</span>
+      </button>
+      {modelAssets.map((asset) => (
+        <button
+          key={asset.id}
+          className="asset-tile"
+          onClick={() => addObject('importedModel', { assetId: asset.id, name: asset.name })}
+        >
+          <span className="asset-tile-icon">
+            <Package size={22} />
+          </span>
+          <span className="asset-tile-label">{asset.name}</span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
 function TexturesTab() {
-  return <div className="asset-browser-empty">Nenhuma textura ainda.</div>
+  const assets = useEditorStore((s) => s.assets)
+  const importTexture = useEditorStore((s) => s.importTexture)
+  const selectedIds = useEditorStore((s) => s.selectedIds)
+  const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
+  const updateObject = useEditorStore((s) => s.updateObject)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const textureAssets = assets.filter((a) => a.kind === 'texture')
+
+  const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    await importTexture(file)
+  }
+
+  return (
+    <div className="asset-grid">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={handleFileChange}
+      />
+      <button className="asset-tile" onClick={() => fileInputRef.current?.click()}>
+        <span className="asset-tile-icon">
+          <Plus size={22} />
+        </span>
+        <span className="asset-tile-label">Importar textura</span>
+      </button>
+      {textureAssets.map((asset) => (
+        <button
+          key={asset.id}
+          className="asset-tile"
+          disabled={!selectedId}
+          title={selectedId ? undefined : 'Selecione um objeto para aplicar a textura'}
+          onClick={() => selectedId && updateObject(selectedId, { colorMapAssetId: asset.id })}
+        >
+          <span className="asset-tile-icon">
+            <Image size={22} />
+          </span>
+          <span className="asset-tile-label">{asset.name}</span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function VideoTab() {
+  const assets = useEditorStore((s) => s.assets)
+  const importVideo = useEditorStore((s) => s.importVideo)
+  const selectedIds = useEditorStore((s) => s.selectedIds)
+  const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
+  const updateObject = useEditorStore((s) => s.updateObject)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const videoAssets = assets.filter((a) => a.kind === 'video')
+
+  const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    await importVideo(file)
+  }
+
+  return (
+    <div className="asset-grid">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="video/*"
+        style={{ display: 'none' }}
+        onChange={handleFileChange}
+      />
+      <button className="asset-tile" onClick={() => fileInputRef.current?.click()}>
+        <span className="asset-tile-icon">
+          <Plus size={22} />
+        </span>
+        <span className="asset-tile-label">Importar vídeo</span>
+      </button>
+      {videoAssets.map((asset) => (
+        <button
+          key={asset.id}
+          className="asset-tile"
+          disabled={!selectedId}
+          title={selectedId ? undefined : 'Selecione um objeto para aplicar o vídeo'}
+          onClick={() =>
+            selectedId && updateObject(selectedId, { videoMapAssetId: asset.id, colorMapAssetId: null })
+          }
+        >
+          <span className="asset-tile-icon">
+            <Video size={22} />
+          </span>
+          <span className="asset-tile-label">{asset.name}</span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function AudioTab() {
+  const assets = useEditorStore((s) => s.assets)
+  const importAudio = useEditorStore((s) => s.importAudio)
+  const addObject = useEditorStore((s) => s.addObject)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const audioAssets = assets.filter((a) => a.kind === 'audio')
+
+  const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    await importAudio(file)
+  }
+
+  return (
+    <div className="asset-grid">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="audio/*"
+        style={{ display: 'none' }}
+        onChange={handleFileChange}
+      />
+      <button className="asset-tile" onClick={() => fileInputRef.current?.click()}>
+        <span className="asset-tile-icon">
+          <Plus size={22} />
+        </span>
+        <span className="asset-tile-label">Importar áudio</span>
+      </button>
+      {audioAssets.map((asset) => (
+        <button
+          key={asset.id}
+          className="asset-tile"
+          onClick={() => addObject('soundSource', { assetId: asset.id, name: asset.name })}
+        >
+          <span className="asset-tile-icon">
+            <Volume2 size={22} />
+          </span>
+          <span className="asset-tile-label">{asset.name}</span>
+        </button>
+      ))}
+    </div>
+  )
 }
 
 function StoreTab() {
@@ -151,7 +355,10 @@ export function AssetBrowser() {
           <div className="asset-browser-content">
             {activeTab === 'scenes' && <ScenesTab />}
             {activeTab === 'objects' && <ObjectsTab />}
+            {activeTab === 'models' && <ModelsTab />}
             {activeTab === 'textures' && <TexturesTab />}
+            {activeTab === 'video' && <VideoTab />}
+            {activeTab === 'audio' && <AudioTab />}
             {activeTab === 'store' && <StoreTab />}
           </div>
         </div>

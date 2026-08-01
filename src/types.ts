@@ -19,7 +19,16 @@ export type MeshKind =
 // which stays the scene's simple default lighting.
 export type LightKind = 'pointLight' | 'spotLight' | 'directionalLight'
 
-export type PrimitiveKind = MeshKind | LightKind
+// Imported/asset-backed primitives — like lights, they share the same
+// SceneObject/objects[] array as meshes (grouping, undo/redo, persistence,
+// drag-and-drop, search all work for free), but have their own field subset:
+// 'importedModel' renders a cloned GLTF scene instead of a Geometry/Material
+// pair; 'soundSource' has no visible geometry at all, just an icon gizmo
+// (same idea as LightKind) plus a positional audio node. See assetId/
+// colorMapAssetId/videoMapAssetId/sound* fields on SceneObject below.
+export type ImportedKind = 'importedModel' | 'soundSource'
+
+export type PrimitiveKind = MeshKind | LightKind | ImportedKind
 
 // Which faces render — mirrors THREE.FrontSide/BackSide/DoubleSide.
 export type MaterialSide = 'front' | 'back' | 'double'
@@ -109,6 +118,39 @@ export interface SceneObject {
   shadowBlur: number
   shadowPenumbra: number // spot/directional only — unused for point (Spline's Point Light only has "Radius", no separate penumbra)
   shadowSize: number // directional only — half-extent of the shadow camera frustum
+  // Asset-backed fields — see AssetMeta/assetStore.ts. `assetId` is reused
+  // for both an imported model's mesh data and a soundSource's audio clip
+  // (the two kinds are mutually exclusive, so one field covers both without
+  // ambiguity). `colorMapAssetId`/`videoMapAssetId` are mesh-only and
+  // mutually exclusive with each other (enforced in the Inspector UI, not
+  // the type) — at most one texture source drives Material's `map`.
+  assetId?: string
+  colorMapAssetId?: string | null
+  videoMapAssetId?: string | null
+  // soundSource-only fields, same "unused for other kinds" convention as the
+  // light-only fields above.
+  soundVolume: number
+  soundLoop: boolean
+  soundRefDistance: number
+  soundMaxDistance: number
+  // Whether this sound (or, on SceneSettings, the background music) should
+  // start playing automatically once this becomes a playable VTT rather than
+  // just the editor — unused today (see "▶ Testar" in the Inspector), saved
+  // now so that future mode doesn't need a migration.
+  autoplayIntent: boolean
+}
+
+// Binary asset kinds importable via AssetBrowser.tsx — see assetStore.ts for
+// the IndexedDB-backed storage these are loaded from/into.
+export type AssetKind = 'model' | 'texture' | 'audio' | 'video'
+
+// Lightweight metadata kept in useEditorStore's `assets` state (no blob) —
+// the blob itself is fetched on demand from assetStore.ts via `id`.
+export interface AssetMeta {
+  id: string
+  name: string
+  kind: AssetKind
+  mimeType: string
 }
 
 // Visual/organizational grouping only for now — no real 3D parenting yet
@@ -156,6 +198,14 @@ export interface SceneSettings {
   // -180..180 azimuth) so a future sky shader can reuse these same fields.
   sunElevation: number
   sunAzimuth: number
+  // Background music — non-positional THREE.Audio played through the same
+  // AudioListener as soundSource objects (see CameraRig in Editor3D.tsx).
+  // Same autoplayIntent convention as SceneObject's sound fields: saved for
+  // the future playable-VTT mode, never auto-played in the editor itself.
+  backgroundMusicAssetId?: string | null
+  backgroundMusicVolume: number
+  backgroundMusicLoop: boolean
+  backgroundMusicAutoplayIntent: boolean
 }
 
 export type TransformMode = 'translate' | 'rotate' | 'scale' | 'scaleFree'
@@ -196,7 +246,14 @@ export type AxisView = 'front' | 'back' | 'top' | 'left' | 'right'
 // Category tabs of the bottom AssetBrowser panel (Interverse Engine's
 // "Project Folder" — see AssetBrowser.tsx), adapted to concepts that
 // actually exist in this project (no Scripts/Particles/Materials-as-asset).
-export type AssetBrowserTab = 'scenes' | 'objects' | 'textures' | 'store'
+export type AssetBrowserTab =
+  | 'scenes'
+  | 'objects'
+  | 'textures'
+  | 'store'
+  | 'models'
+  | 'audio'
+  | 'video'
 
 // One box part of a user-imported placeholder object (see ImportStudio.tsx).
 // Deliberately NOT the full SceneObject shape — this is a small, storable

@@ -1061,6 +1061,55 @@ button.asset-tile.active {
   min-width: 110px;
 }
 
+/* Small text buttons used for asset actions inside a .field-row (Escolher
+   arquivo/Substituir arquivo/Remover/▶ Testar) — same compact visual weight
+   as .field-dropdown's own button above. */
+.field-row button:not(.axis-lock-toggle) {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #23262d;
+  color: #e4e6eb;
+  border: 1px solid #33373f;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.field-row button:not(.axis-lock-toggle):hover {
+  background: #2c3038;
+}
+
+.field-row button:not(.axis-lock-toggle).active {
+  background: #3a6df0;
+  border-color: #3a6df0;
+  color: #fff;
+}
+
+.texture-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  min-width: 0;
+}
+
+.texture-field-name {
+  font-size: 11px;
+  color: #8a8f98;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 90px;
+}
+
+button.asset-tile:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .field-row input[type='number'] {
   width: 0;
   flex: 1;

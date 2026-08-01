@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ChevronDown,
   ChevronLeft,
@@ -11,12 +11,20 @@ import {
   Scaling,
   Trash2,
   Unlink2,
+  Upload,
 } from 'lucide-react'
 import { useEditorStore } from '../state/useEditorStore'
-import { isLightKind, PRIMITIVE_BASE_SIZE, PRIMITIVE_LABEL } from '../scene/primitives'
+import {
+  isImportedModelKind,
+  isLightKind,
+  isSoundKind,
+  PRIMITIVE_BASE_SIZE,
+  PRIMITIVE_LABEL,
+} from '../scene/primitives'
 import { MultiSelectionInspector } from './MultiSelectionInspector'
 import { SceneInspector } from './SceneInspector'
 import { useDropdown } from './useDropdown'
+import { rejectIfNotGlb } from '../scene/assetLoaders'
 import type { MaterialSide, MaterialType, SceneObject, ShadowMode, ShadowResolution } from '../types'
 
 function formatMeters(value: number) {
@@ -420,6 +428,248 @@ function LightInspector({ object }: { object: SceneObject }) {
   )
 }
 
+// Imported models share the header/rename/delete chrome and Transformar
+// section with mesh objects, but have no Material/Visibilidade sections (the
+// model brings its own materials) — same "own body instead of branching
+// every section" reasoning as LightInspector above.
+function ImportedModelInspector({ object }: { object: SceneObject }) {
+  const updateObject = useEditorStore((s) => s.updateObject)
+  const removeObject = useEditorStore((s) => s.removeObject)
+  const importModel = useEditorStore((s) => s.importModel)
+  const transformMode = useEditorStore((s) => s.transformMode)
+  const setTransformMode = useEditorStore((s) => s.setTransformMode)
+  const requestCameraFocus = useEditorStore((s) => s.requestCameraFocus)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file || !rejectIfNotGlb(file)) return
+    const meta = await importModel(file)
+    updateObject(object.id, { assetId: meta.id })
+  }
+
+  return (
+    <div className="floating-panel selection-panel">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".glb"
+        style={{ display: 'none' }}
+        onChange={handleFileChange}
+      />
+      <div className="selection-header">
+        <span className="selection-category">{PRIMITIVE_LABEL[object.kind].toUpperCase()}</span>
+        <input
+          className="selection-name"
+          type="text"
+          value={object.name}
+          onChange={(e) => updateObject(object.id, { name: e.target.value })}
+        />
+      </div>
+
+      <div className="selection-actions">
+        <div className="selection-actions-row">
+          <button
+            className={transformMode === 'scale' ? 'active' : ''}
+            onClick={() => setTransformMode(transformMode === 'scale' ? 'translate' : 'scale')}
+          >
+            <span className="action-label">
+              <Scaling size={14} />
+              {transformMode === 'scale' ? 'Desativar' : 'Ativar'} escalar
+            </span>
+            <span className="action-shortcut">S</span>
+          </button>
+          <button
+            className={transformMode === 'rotate' ? 'active' : ''}
+            onClick={() => setTransformMode(transformMode === 'rotate' ? 'translate' : 'rotate')}
+          >
+            <span className="action-label">
+              <RotateCw size={14} />
+              {transformMode === 'rotate' ? 'Desativar' : 'Ativar'} rotacionar
+            </span>
+            <span className="action-shortcut">R</span>
+          </button>
+        </div>
+        <button onClick={() => requestCameraFocus(object.id)}>
+          <span className="action-label">
+            <Focus size={14} />
+            Centralizar câmera
+          </span>
+          <span className="action-shortcut">.</span>
+        </button>
+        <button className="danger" onClick={() => removeObject(object.id)}>
+          <span className="action-label">
+            <Trash2 size={14} />
+            Excluir objeto
+          </span>
+          <span className="action-shortcut">Del</span>
+        </button>
+      </div>
+
+      <div className="field-section-label">Transformar</div>
+      <div className="selection-fields">
+        <Vector3Row
+          label="Posição"
+          value={object.position}
+          onChange={(position) => updateObject(object.id, { position })}
+        />
+        <Vector3Row
+          label="Rotação"
+          value={object.rotation}
+          onChange={(rotation) => updateObject(object.id, { rotation })}
+          step={0.05}
+        />
+        <Vector3Row
+          label="Escala"
+          value={object.scale}
+          onChange={(scale) => updateObject(object.id, { scale })}
+        />
+      </div>
+
+      <div className="field-section-label">Arquivo</div>
+      <div className="selection-fields">
+        <div className="field-row">
+          <span className="field-label">Modelo (.glb)</span>
+          <button onClick={() => fileInputRef.current?.click()}>
+            <span className="action-label">
+              <Upload size={14} />
+              Substituir arquivo
+            </span>
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Sound sources share the header/rename/delete chrome with lights/meshes but
+// have their own field set — no material/visibility/scale (a point-source
+// audio emitter has no "size"), same "own body" reasoning as LightInspector.
+function SoundInspector({ object }: { object: SceneObject }) {
+  const updateObject = useEditorStore((s) => s.updateObject)
+  const removeObject = useEditorStore((s) => s.removeObject)
+  const importAudio = useEditorStore((s) => s.importAudio)
+  const assets = useEditorStore((s) => s.assets)
+  const isTesting = useEditorStore((s) => s.testingSoundId === object.id)
+  const toggleSoundTest = useEditorStore((s) => s.toggleSoundTest)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    const meta = await importAudio(file)
+    updateObject(object.id, { assetId: meta.id })
+  }
+
+  return (
+    <div className="floating-panel selection-panel">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="audio/*"
+        style={{ display: 'none' }}
+        onChange={handleFileChange}
+      />
+      <div className="selection-header">
+        <span className="selection-category">{PRIMITIVE_LABEL[object.kind].toUpperCase()}</span>
+        <input
+          className="selection-name"
+          type="text"
+          value={object.name}
+          onChange={(e) => updateObject(object.id, { name: e.target.value })}
+        />
+      </div>
+
+      <div className="selection-actions">
+        <button className={isTesting ? 'active' : ''} onClick={() => toggleSoundTest(object.id)}>
+          <span className="action-label">{isTesting ? '■ Parar' : '▶ Testar'}</span>
+        </button>
+        <button className="danger" onClick={() => removeObject(object.id)}>
+          <span className="action-label">
+            <Trash2 size={14} />
+            Excluir som
+          </span>
+          <span className="action-shortcut">Del</span>
+        </button>
+      </div>
+
+      <div className="field-section-label">Transformar</div>
+      <div className="selection-fields">
+        <Vector3Row
+          label="Posição"
+          value={object.position}
+          onChange={(position) => updateObject(object.id, { position })}
+        />
+      </div>
+
+      <div className="field-section-label">Som</div>
+      <div className="selection-fields">
+        <div className="field-row">
+          <span className="field-label">Volume</span>
+          <SliderField
+            max={1}
+            step={0.05}
+            value={object.soundVolume}
+            onChange={(soundVolume) =>
+              updateObject(object.id, { soundVolume: Math.max(0, Math.min(1, soundVolume)) })
+            }
+          />
+        </div>
+        <div className="field-row">
+          <span className="field-label">Repetir</span>
+          <SegmentedControl
+            options={[
+              { value: 'off', label: 'Não' },
+              { value: 'on', label: 'Sim' },
+            ]}
+            value={object.soundLoop ? 'on' : 'off'}
+            onChange={(v) => updateObject(object.id, { soundLoop: v === 'on' })}
+          />
+        </div>
+        <div className="field-row">
+          <span className="field-label">Distância de referência</span>
+          <SliderField
+            max={30}
+            step={0.5}
+            value={object.soundRefDistance}
+            onChange={(soundRefDistance) =>
+              updateObject(object.id, { soundRefDistance: Math.max(0, soundRefDistance) })
+            }
+          />
+        </div>
+        <div className="field-row">
+          <span className="field-label">Distância máxima</span>
+          <SliderField
+            max={100}
+            step={1}
+            value={object.soundMaxDistance}
+            onChange={(soundMaxDistance) =>
+              updateObject(object.id, { soundMaxDistance: Math.max(0, soundMaxDistance) })
+            }
+          />
+        </div>
+      </div>
+
+      <div className="field-section-label">Arquivo</div>
+      <div className="selection-fields">
+        <div className="field-row">
+          <span className="field-label">Áudio</span>
+          <div className="texture-field">
+            {object.assetId && (
+              <span className="texture-field-name">
+                {assets.find((a) => a.id === object.assetId)?.name ?? object.assetId}
+              </span>
+            )}
+            <button onClick={() => fileInputRef.current?.click()}>Escolher arquivo</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function Inspector() {
   const objects = useEditorStore((s) => s.objects)
   const selectedIds = useEditorStore((s) => s.selectedIds)
@@ -431,6 +681,11 @@ export function Inspector() {
   const requestCameraFocus = useEditorStore((s) => s.requestCameraFocus)
   const inspectorVisible = useEditorStore((s) => s.inspectorVisible)
   const toggleInspectorVisible = useEditorStore((s) => s.toggleInspectorVisible)
+  const assets = useEditorStore((s) => s.assets)
+  const importTexture = useEditorStore((s) => s.importTexture)
+  const importVideo = useEditorStore((s) => s.importVideo)
+  const textureInputRef = useRef<HTMLInputElement>(null)
+  const videoInputRef = useRef<HTMLInputElement>(null)
   const object = objects.find((o) => o.id === selectedId)
 
   const collapseToggle = (
@@ -464,14 +719,15 @@ export function Inspector() {
           setTransformMode(transformMode === 'rotate' ? 'translate' : 'rotate')
           break
         case 's':
-          // Scale is meaningless for lights (see SceneObjects.tsx's
-          // effectiveTransformMode) — don't even flip the global mode.
-          if (!isLightKind(object.kind)) {
+          // Scale is meaningless for lights/sound sources (see
+          // SceneObjects.tsx's effectiveTransformMode) — don't even flip the
+          // global mode.
+          if (!isLightKind(object.kind) && !isSoundKind(object.kind)) {
             setTransformMode(transformMode === 'scale' ? 'translate' : 'scale')
           }
           break
         case 'f':
-          if (!isLightKind(object.kind)) {
+          if (!isLightKind(object.kind) && !isSoundKind(object.kind)) {
             setTransformMode(transformMode === 'scaleFree' ? 'translate' : 'scaleFree')
           }
           break
@@ -511,6 +767,22 @@ export function Inspector() {
     return (
       <>
         {inspectorVisible && <LightInspector object={object} />}
+        {collapseToggle}
+      </>
+    )
+  }
+  if (isImportedModelKind(object.kind)) {
+    return (
+      <>
+        {inspectorVisible && <ImportedModelInspector object={object} />}
+        {collapseToggle}
+      </>
+    )
+  }
+  if (isSoundKind(object.kind)) {
+    return (
+      <>
+        {inspectorVisible && <SoundInspector object={object} />}
         {collapseToggle}
       </>
     )
@@ -712,6 +984,66 @@ export function Inspector() {
               updateObject(object.id, { emissiveIntensity: Math.max(0, emissiveIntensity) })
             }
           />
+        </div>
+        <div className="field-row">
+          <span className="field-label">Textura</span>
+          <input
+            ref={textureInputRef}
+            type="file"
+            accept="image/*"
+            style={{ display: 'none' }}
+            onChange={async (e) => {
+              const file = e.target.files?.[0]
+              e.target.value = ''
+              if (!file) return
+              const meta = await importTexture(file)
+              // Image and video maps are mutually exclusive — applying one
+              // clears the other so Material only ever has one active.
+              updateObject(object.id, { colorMapAssetId: meta.id, videoMapAssetId: null })
+            }}
+          />
+          <div className="texture-field">
+            {object.colorMapAssetId && (
+              <span className="texture-field-name">
+                {assets.find((a) => a.id === object.colorMapAssetId)?.name ?? object.colorMapAssetId}
+              </span>
+            )}
+            <button onClick={() => textureInputRef.current?.click()}>Escolher arquivo</button>
+            {object.colorMapAssetId && (
+              <button onClick={() => updateObject(object.id, { colorMapAssetId: null })}>
+                Remover
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="field-row">
+          <span className="field-label">Vídeo</span>
+          <input
+            ref={videoInputRef}
+            type="file"
+            accept="video/*"
+            style={{ display: 'none' }}
+            onChange={async (e) => {
+              const file = e.target.files?.[0]
+              e.target.value = ''
+              if (!file) return
+              const meta = await importVideo(file)
+              updateObject(object.id, { videoMapAssetId: meta.id, colorMapAssetId: null })
+            }}
+          />
+          <div className="texture-field">
+            {object.videoMapAssetId && (
+              <span className="texture-field-name">
+                {assets.find((a) => a.id === object.videoMapAssetId)?.name ?? object.videoMapAssetId}
+              </span>
+            )}
+            <button onClick={() => videoInputRef.current?.click()}>Escolher arquivo</button>
+            {object.videoMapAssetId && (
+              <button onClick={() => updateObject(object.id, { videoMapAssetId: null })}>
+                Remover
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
