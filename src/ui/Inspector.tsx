@@ -3,6 +3,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Film,
   Focus,
   ImageOff,
   Link2,
@@ -30,6 +31,93 @@ import type { MaterialSide, MaterialType, SceneObject, ShadowMode, ShadowResolut
 
 function formatMeters(value: number) {
   return `${value.toFixed(2).replace('.', ',')} m`
+}
+
+// Mirrors a transform patch into the actively-edited keyframe, if any (see
+// AnimationPanel.tsx's selectKeyframeForEditing) — shared by the default
+// mesh body and ImportedModelInspector's position/rotation/scale handlers,
+// the only two kinds animation supports in v1 (not lights/sound). The
+// object.animationId check guards against a stale editingAnimationClipId
+// left over from a previously-selected object.
+function useAnimationKeyframeMirror(object: SceneObject | undefined) {
+  const editingAnimationClipId = useEditorStore((s) => s.editingAnimationClipId)
+  const editingKeyframeId = useEditorStore((s) => s.editingKeyframeId)
+  const updateKeyframe = useEditorStore((s) => s.updateKeyframe)
+  return (patch: Partial<Pick<SceneObject, 'position' | 'rotation' | 'scale'>>) => {
+    if (editingAnimationClipId && editingKeyframeId && editingAnimationClipId === object?.animationId) {
+      updateKeyframe(editingAnimationClipId, editingKeyframeId, patch)
+    }
+  }
+}
+
+// Same mirroring, for CutsceneStudio.tsx's multi-object tracks instead of a
+// single AnimationClip — separate hook (rather than folding into the one
+// above) since a cutscene keyframe is scoped to a *track* (objectId + own
+// keyframe list), not a clip directly. Both hooks are called from the same
+// handlers below; each is a cheap no-op when its own editing state isn't
+// active, so posing a plain object (neither system active) costs nothing
+// extra.
+function useCutsceneKeyframeMirror(object: SceneObject | undefined) {
+  const editingCutsceneId = useEditorStore((s) => s.editingCutsceneId)
+  const editingCutsceneKeyframeId = useEditorStore((s) => s.editingCutsceneKeyframeId)
+  const track = useEditorStore((s) =>
+    s.cutscenes.find((c) => c.id === s.editingCutsceneId)?.tracks.find((t) => t.objectId === object?.id),
+  )
+  const updateCutsceneKeyframe = useEditorStore((s) => s.updateCutsceneKeyframe)
+  return (patch: Partial<Pick<SceneObject, 'position' | 'rotation' | 'scale'>>) => {
+    if (
+      editingCutsceneId &&
+      editingCutsceneKeyframeId &&
+      track?.keyframes.some((k) => k.id === editingCutsceneKeyframeId)
+    ) {
+      updateCutsceneKeyframe(editingCutsceneId, track.id, editingCutsceneKeyframeId, patch)
+    }
+  }
+}
+
+// "Animação" field-section shared by the default mesh body and
+// ImportedModelInspector — no clip yet: a single create button; has one: a
+// summary + links to open AnimationPanel.tsx (which doubles its own open
+// state as editingAnimationClipId !== null) or delete the clip outright
+// (1:1 relationship, so unlinking == deleting, no orphan cleanup needed).
+function AnimationSection({ object }: { object: SceneObject }) {
+  const clip = useEditorStore((s) => s.animations.find((a) => a.id === object.animationId))
+  const createAnimationForObject = useEditorStore((s) => s.createAnimationForObject)
+  const deleteAnimation = useEditorStore((s) => s.deleteAnimation)
+  const selectKeyframeForEditing = useEditorStore((s) => s.selectKeyframeForEditing)
+
+  return (
+    <>
+      <div className="field-section-label">Animação</div>
+      <div className="selection-fields">
+        {!clip ? (
+          <button onClick={() => createAnimationForObject(object.id)}>
+            <span className="action-label">
+              <Film size={14} />
+              Criar animação
+            </span>
+          </button>
+        ) : (
+          <>
+            <div className="field-row">
+              <span className="field-label">Clipe</span>
+              <span className="texture-field-name">
+                {clip.name} · {clip.keyframes.length} poses
+              </span>
+            </div>
+            <div className="selection-actions-row">
+              <button onClick={() => selectKeyframeForEditing(clip.id, null)}>
+                <span className="action-label">Editar animação</span>
+              </button>
+              <button className="danger" onClick={() => deleteAnimation(clip.id)}>
+                <span className="action-label">Remover</span>
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </>
+  )
 }
 
 function Vector3Row({
@@ -447,6 +535,8 @@ function ImportedModelInspector({ object }: { object: SceneObject }) {
   // doesn't re-parse the GLB, it just reads the already-resolved textures
   // list alongside the viewport's own clone.
   const { status: modelStatus, textures: modelTextures } = useImportedModel(object.assetId)
+  const mirrorToKeyframe = useAnimationKeyframeMirror(object)
+  const mirrorToCutsceneKeyframe = useCutsceneKeyframeMirror(object)
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -519,20 +609,34 @@ function ImportedModelInspector({ object }: { object: SceneObject }) {
         <Vector3Row
           label="Posição"
           value={object.position}
-          onChange={(position) => updateObject(object.id, { position })}
+          onChange={(position) => {
+            updateObject(object.id, { position })
+            mirrorToKeyframe({ position })
+            mirrorToCutsceneKeyframe({ position })
+          }}
         />
         <Vector3Row
           label="Rotação"
           value={object.rotation}
-          onChange={(rotation) => updateObject(object.id, { rotation })}
+          onChange={(rotation) => {
+            updateObject(object.id, { rotation })
+            mirrorToKeyframe({ rotation })
+            mirrorToCutsceneKeyframe({ rotation })
+          }}
           step={0.05}
         />
         <Vector3Row
           label="Escala"
           value={object.scale}
-          onChange={(scale) => updateObject(object.id, { scale })}
+          onChange={(scale) => {
+            updateObject(object.id, { scale })
+            mirrorToKeyframe({ scale })
+            mirrorToCutsceneKeyframe({ scale })
+          }}
         />
       </div>
+
+      <AnimationSection object={object} />
 
       <div className="field-section-label">Arquivo</div>
       <div className="selection-fields">
@@ -722,6 +826,11 @@ export function Inspector() {
   const textureInputRef = useRef<HTMLInputElement>(null)
   const videoInputRef = useRef<HTMLInputElement>(null)
   const object = objects.find((o) => o.id === selectedId)
+  // Called unconditionally (before the branches below, some of which return
+  // early with `object` still undefined) — see useAnimationKeyframeMirror's
+  // own optional-object handling.
+  const mirrorToKeyframe = useAnimationKeyframeMirror(object)
+  const mirrorToCutsceneKeyframe = useCutsceneKeyframeMirror(object)
 
   const collapseToggle = (
     <button
@@ -829,18 +938,23 @@ export function Inspector() {
   const handleScaleChange = (next: [number, number, number]) => {
     if (!scaleLocked) {
       updateObject(object.id, { scale: next })
+      mirrorToKeyframe({ scale: next })
+      mirrorToCutsceneKeyframe({ scale: next })
       return
     }
     const prev = object.scale
     const changedIndex = next.findIndex((v, i) => v !== prev[i])
     if (changedIndex === -1) {
       updateObject(object.id, { scale: next })
+      mirrorToKeyframe({ scale: next })
+      mirrorToCutsceneKeyframe({ scale: next })
       return
     }
     const ratio = prev[changedIndex] !== 0 ? next[changedIndex] / prev[changedIndex] : 1
-    updateObject(object.id, {
-      scale: prev.map((v) => v * ratio) as [number, number, number],
-    })
+    const scale = prev.map((v) => v * ratio) as [number, number, number]
+    updateObject(object.id, { scale })
+    mirrorToKeyframe({ scale })
+    mirrorToCutsceneKeyframe({ scale })
   }
 
   return (
@@ -925,12 +1039,20 @@ export function Inspector() {
         <Vector3Row
           label="Posição"
           value={object.position}
-          onChange={(position) => updateObject(object.id, { position })}
+          onChange={(position) => {
+            updateObject(object.id, { position })
+            mirrorToKeyframe({ position })
+            mirrorToCutsceneKeyframe({ position })
+          }}
         />
         <Vector3Row
           label="Rotação"
           value={object.rotation}
-          onChange={(rotation) => updateObject(object.id, { rotation })}
+          onChange={(rotation) => {
+            updateObject(object.id, { rotation })
+            mirrorToKeyframe({ rotation })
+            mirrorToCutsceneKeyframe({ rotation })
+          }}
           step={0.05}
         />
         <Vector3Row
@@ -942,6 +1064,8 @@ export function Inspector() {
           onToggleLock={() => setScaleLocked((v) => !v)}
         />
       </div>
+
+      <AnimationSection object={object} />
 
       <div className="field-section-label">Materiais</div>
       <div className="selection-fields">

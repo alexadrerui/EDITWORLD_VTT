@@ -138,6 +138,73 @@ export interface SceneObject {
   // just the editor — unused today (see "▶ Testar" in the Inspector), saved
   // now so that future mode doesn't need a migration.
   autoplayIntent: boolean
+  // Which AnimationClip (see below) currently drives this object, if any —
+  // same "separate collection + xId reference" shape as groupId/SceneGroup,
+  // not embedded directly here, since a clip's keyframe list is variable-
+  // length structured data and SceneObject stays flat (scalars/fixed tuples
+  // only) everywhere else. One clip per object for now (see AnimationClip).
+  animationId: string | null
+}
+
+// One pose of an AnimationClip (see below) — always a full position+rotation+
+// scale triple, never a sparse per-property value, since the editing model is
+// "pose the whole object with the existing gizmo, then save that pose,"
+// which only makes sense as a dense keyframe. `time` is milliseconds from the
+// clip's start, matching anime.js's own default timeUnit (see
+// animationEngine.ts) so no ms<->s conversion is needed anywhere.
+export interface AnimationKeyframe {
+  id: string
+  time: number
+  position: [number, number, number]
+  rotation: [number, number, number]
+  scale: [number, number, number]
+  // anime.js ease string for the segment arriving AT this keyframe (the
+  // transition from the previous keyframe) — falls back to AnimationClip's
+  // own `easing` when unset. Meaningless on a clip's first keyframe (no
+  // incoming segment).
+  easing?: string
+}
+
+// A keyframe animation clip — like SceneGroup, kept as its own top-level
+// collection (SceneData.animations) rather than embedded on SceneObject,
+// referenced by SceneObject.animationId. No separate `duration` field: it's
+// derived as the last keyframe's `time` so it can never drift out of sync
+// with the keyframe list itself.
+export interface AnimationClip {
+  id: string
+  name: string
+  loop: boolean
+  easing: string // clip-level default ease, overridable per-keyframe
+  keyframes: AnimationKeyframe[] // sorted by `time`
+}
+
+// One object's keyframe track within a Cutscene (see below) — reuses
+// AnimationKeyframe as-is (same dense pose-per-keyframe shape), just scoped
+// to whichever SceneObject `objectId` points at instead of implied by a
+// single animationId reference.
+export interface CutsceneTrack {
+  id: string
+  objectId: string
+  keyframes: AnimationKeyframe[]
+}
+
+// A multi-object choreographed sequence — the "cutscene creator" entry
+// point, separate from the single-object AnimationClip system above (that
+// one stays as the simple "one loop on one object" path; this one is for
+// coordinating several objects on one shared timeline). Kept in
+// SceneData.cutscenes, its own top-level collection, same as animations/
+// groups — a track's objectId is the only link back to a SceneObject, no
+// reverse reference needed since a cutscene isn't "owned" by any one object.
+export interface Cutscene {
+  id: string
+  name: string
+  loop: boolean
+  easing: string
+  tracks: CutsceneTrack[]
+  // Same "root when unset" folder convention as AssetMeta/CustomAsset —
+  // cutscenes are organized in the AssetBrowser's "Animação" tab folders
+  // (AssetFolder.tab: 'animations') the same way models/textures/etc. are.
+  folderId?: string | null
 }
 
 // Binary asset kinds importable via AssetBrowser.tsx — see assetStore.ts for
@@ -162,7 +229,7 @@ export interface AssetMeta {
 // described on AssetFolder — deliberately excludes 'scenes' (has its own
 // list, not asset-shaped) and 'store' (mock/read-only catalog, nothing to
 // organize).
-export type AssetFolderTab = 'objects' | 'models' | 'textures' | 'video' | 'audio'
+export type AssetFolderTab = 'objects' | 'models' | 'textures' | 'video' | 'audio' | 'animations'
 
 // A user-created grouping folder within one AssetBrowser tab — purely
 // organizational (like SceneGroup for scene objects), one level deep only:
@@ -276,6 +343,7 @@ export type AssetBrowserTab =
   | 'models'
   | 'audio'
   | 'video'
+  | 'animations'
 
 // One box part of a user-imported placeholder object (see ImportStudio.tsx).
 // Deliberately NOT the full SceneObject shape — this is a small, storable

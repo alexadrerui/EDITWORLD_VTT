@@ -5,6 +5,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronUp,
+  Clapperboard,
   Image,
   ImagePlus,
   Layers,
@@ -33,6 +34,7 @@ const TABS: { value: AssetBrowserTab; label: string; icon: LucideIcon }[] = [
   { value: 'textures', label: 'Texturas', icon: Image },
   { value: 'video', label: 'Vídeo', icon: Video },
   { value: 'audio', label: 'Áudio', icon: Volume2 },
+  { value: 'animations', label: 'Animação', icon: Clapperboard },
   { value: 'store', label: 'Asset Store', icon: Store },
 ]
 
@@ -687,6 +689,88 @@ function AudioTab() {
   )
 }
 
+// Cutscenes as folder-organizable tiles, same shape as ModelsTab/AudioTab —
+// but a tile isn't "add to scene" (a cutscene isn't an instantiable object,
+// it's behavior on existing objects), so a click opens CutsceneStudio.tsx
+// for it instead. "+"/the empty-area context menu's "Nova cutscene" creates
+// one and opens the studio immediately (createCutscene already sets
+// editingCutsceneId) — see the plan's "adicionar já vai pra uma nova janela"
+// requirement.
+function AnimationsTab() {
+  const cutscenes = useEditorStore((s) => s.cutscenes)
+  const createCutscene = useEditorStore((s) => s.createCutscene)
+  const deleteCutscene = useEditorStore((s) => s.deleteCutscene)
+  const selectCutsceneKeyframeForEditing = useEditorStore((s) => s.selectCutsceneKeyframeForEditing)
+  const moveCutsceneToFolder = useEditorStore((s) => s.moveCutsceneToFolder)
+  const createFolder = useEditorStore((s) => s.createFolder)
+  const renameFolder = useEditorStore((s) => s.renameFolder)
+  const deleteFolder = useEditorStore((s) => s.deleteFolder)
+  const folders = useTabFolders('animations')
+  const [folderId, setFolderId] = useState<string | null>(null)
+  const currentFolder = folders.find((f) => f.id === folderId) ?? null
+  const { pos, onContextMenu, close } = useAssetContextMenu()
+  const { menu: itemMenu, openItemMenu, close: closeItemMenu } = useItemContextMenu()
+
+  const visibleCutscenes = cutscenes.filter((c) => (c.folderId ?? null) === folderId)
+
+  return (
+    <>
+      {currentFolder && (
+        <FolderBreadcrumb
+          name={currentFolder.name}
+          onBack={() => setFolderId(null)}
+          onDropToRoot={(id) => moveCutsceneToFolder(id, null)}
+        />
+      )}
+      <div className="asset-grid" onContextMenu={onContextMenu}>
+        {!currentFolder &&
+          folders.map((folder) => (
+            <FolderTile
+              key={folder.id}
+              folder={folder}
+              onOpen={() => setFolderId(folder.id)}
+              onRename={(name) => renameFolder(folder.id, name)}
+              onDelete={() => deleteFolder(folder.id)}
+              onDropItem={(id) => moveCutsceneToFolder(id, folder.id)}
+            />
+          ))}
+        <button className="asset-tile" onClick={() => createCutscene(folderId)}>
+          <span className="asset-tile-icon">
+            <Plus size={22} />
+          </span>
+          <span className="asset-tile-label">Nova cutscene</span>
+        </button>
+        {visibleCutscenes.map((cutscene) => (
+          <button
+            key={cutscene.id}
+            className="asset-tile"
+            draggable
+            onDragStart={(e) => e.dataTransfer.setData('text/plain', cutscene.id)}
+            onContextMenu={(e) => openItemMenu(e, () => deleteCutscene(cutscene.id))}
+            onClick={() => selectCutsceneKeyframeForEditing(cutscene.id, null)}
+          >
+            <span className="asset-tile-icon">
+              <Clapperboard size={22} />
+            </span>
+            <span className="asset-tile-label">
+              {cutscene.name} · {cutscene.tracks.length} obj.
+            </span>
+          </button>
+        ))}
+      </div>
+      <AssetContextMenu
+        pos={pos}
+        close={close}
+        canCreateFolder={!currentFolder}
+        onCreateFolder={() => createFolder('animations')}
+        onImport={() => createCutscene(folderId)}
+        importLabel="Nova cutscene"
+      />
+      <ItemContextMenu menu={itemMenu} close={closeItemMenu} />
+    </>
+  )
+}
+
 function StoreTab() {
   return (
     <div className="asset-grid">
@@ -731,6 +815,7 @@ export function AssetBrowser() {
             {activeTab === 'textures' && <TexturesTab />}
             {activeTab === 'video' && <VideoTab />}
             {activeTab === 'audio' && <AudioTab />}
+            {activeTab === 'animations' && <AnimationsTab />}
             {activeTab === 'store' && <StoreTab />}
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useMemo, useRef } from 'react'
+import { forwardRef, useCallback, useEffect, useMemo, useRef } from 'react'
 import type { ThreeEvent } from '@react-three/fiber'
 import {
   BackSide,
@@ -49,6 +49,8 @@ import {
 } from './primitives'
 import { useAudioBuffer, useImageTexture, useImportedModel, useVideoTexture } from './assetLoaders'
 import { globalAudioListener } from './audioListener'
+import { useAnimationPreview } from '../animation/animationEngine'
+import { registerMesh, unregisterMesh } from '../animation/meshRegistry'
 
 const MATERIAL_SIDE: Record<MaterialSide, Side> = {
   front: FrontSide,
@@ -774,6 +776,41 @@ export const SceneObjectMesh = forwardRef<Mesh, { object: SceneObject }>(
       object.groupId ? s.groups.find((g) => g.id === object.groupId) : undefined,
     )
     const lightGizmosVisible = useEditorStore((s) => s.lightGizmosVisible)
+    // Whether an anime.js timeline currently owns this object's transform
+    // (either the single-object engine — animationEngine.ts's
+    // useAnimationPreview — or a Cutscene track this object is part of, see
+    // cutsceneEngine.ts) — while true, the declarative position/rotation/
+    // scale props below are suppressed so the timeline's imperative writes
+    // aren't fought/overwritten every render.
+    const isPreviewingAnimation = useEditorStore(
+      (s) => s.testingAnimationId !== null && s.testingAnimationId === object.animationId,
+    )
+    const isPreviewingCutscene = useEditorStore((s) => {
+      if (!s.testingCutsceneId) return false
+      const cutscene = s.cutscenes.find((c) => c.id === s.testingCutsceneId)
+      return !!cutscene?.tracks.some((t) => t.objectId === object.id)
+    })
+    const isPreviewing = isPreviewingAnimation || isPreviewingCutscene
+    // Own ref, merged with the forwarded one (ScaleFaceHandles.tsx/
+    // SelectionOutline.tsx read the forwarded ref imperatively per frame) —
+    // useAnimationPreview needs something to read/write independent of
+    // whoever else holds `ref`. Also registered into meshRegistry.ts so
+    // cutsceneEngine.ts's shared timeline (built outside this component) can
+    // find this specific object's mesh by id.
+    const meshRef = useRef<Mesh>(null)
+    const setRefs = useCallback(
+      (node: Mesh | null) => {
+        meshRef.current = node
+        if (typeof ref === 'function') ref(node)
+        else if (ref) ref.current = node
+      },
+      [ref],
+    )
+    useEffect(() => {
+      registerMesh(object.id, meshRef)
+      return () => unregisterMesh(object.id)
+    }, [object.id])
+    useAnimationPreview(meshRef, object)
 
     // Shift/Ctrl/Cmd-click adds-or-removes this object from the selection
     // instead of replacing it — same modifier convention used by the
@@ -796,11 +833,11 @@ export const SceneObjectMesh = forwardRef<Mesh, { object: SceneObject }>(
     if (isImportedModelKind(object.kind)) {
       return (
         <mesh
-          ref={ref}
+          ref={setRefs}
           name={object.id}
-          position={object.position}
-          rotation={object.rotation}
-          scale={object.scale}
+          position={isPreviewing ? undefined : object.position}
+          rotation={isPreviewing ? undefined : object.rotation}
+          scale={isPreviewing ? undefined : object.scale}
           onPointerDown={onPointerDown}
           onPointerUp={onPointerUp}
         >
@@ -812,7 +849,7 @@ export const SceneObjectMesh = forwardRef<Mesh, { object: SceneObject }>(
     if (isLightKind(object.kind)) {
       return (
         <mesh
-          ref={ref}
+          ref={setRefs}
           name={object.id}
           position={object.position}
           rotation={object.rotation}
@@ -832,7 +869,7 @@ export const SceneObjectMesh = forwardRef<Mesh, { object: SceneObject }>(
     if (isSoundKind(object.kind)) {
       return (
         <mesh
-          ref={ref}
+          ref={setRefs}
           name={object.id}
           position={object.position}
           rotation={object.rotation}
@@ -855,11 +892,11 @@ export const SceneObjectMesh = forwardRef<Mesh, { object: SceneObject }>(
 
     return (
       <mesh
-        ref={ref}
+        ref={setRefs}
         name={object.id}
-        position={object.position}
-        rotation={object.rotation}
-        scale={object.scale}
+        position={isPreviewing ? undefined : object.position}
+        rotation={isPreviewing ? undefined : object.rotation}
+        scale={isPreviewing ? undefined : object.scale}
         {...shadowProps(object.shadowMode)}
         onPointerDown={onPointerDown}
         onPointerUp={onPointerUp}

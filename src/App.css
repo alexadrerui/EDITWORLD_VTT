@@ -686,6 +686,256 @@ button.asset-tile.active {
   border-top: 1px solid #2a2e35;
 }
 
+/* Keyframe/transport panel (AnimationPanel.tsx) — sits left of the Inspector
+   (.selection-panel is right: 12px, 260px wide) so both are visible while
+   posing a keyframe. Plain absolute offset like every other .floating-panel,
+   deliberately NOT centered with a `transform` like .asset-browser — that's
+   what traps a `position: fixed` descendant into the panel's own box instead
+   of the viewport (see AssetContextMenu.tsx's portal fix from earlier). */
+.animation-panel {
+  right: 286px;
+  width: 280px;
+}
+
+/* .selection-header's category+name stack as full-width blocks (see
+   .selection-name's width: 100%) — positioned absolutely instead of as a
+   flex sibling so it doesn't force the name input to wrap onto its own row. */
+.animation-panel .selection-header {
+  position: relative;
+  padding-right: 22px;
+}
+
+.animation-panel-close {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: #8a8f98;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.animation-panel-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #e4e6eb;
+}
+
+.animation-keyframe-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 12px;
+  border-top: 1px solid #2a2e35;
+}
+
+.animation-keyframe-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.animation-keyframe-row.active .animation-keyframe-select {
+  border-color: #3a6df0;
+  color: #e4e6eb;
+}
+
+.animation-keyframe-select {
+  flex: 1;
+  text-align: left;
+  background: #23262d;
+  border: 1px solid #33373f;
+  border-radius: 6px;
+  color: #c9cdd4;
+  font-size: 12px;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.animation-keyframe-select:hover {
+  background: #2c3038;
+}
+
+.animation-keyframe-time {
+  width: 64px;
+  background: #23262d;
+  border: 1px solid #33373f;
+  border-radius: 6px;
+  color: #c9cdd4;
+  font-size: 12px;
+  padding: 6px;
+  text-align: right;
+}
+
+.animation-keyframe-unit {
+  font-size: 11px;
+  color: #565b66;
+}
+
+.animation-keyframe-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: #565b66;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.animation-keyframe-remove:hover {
+  background: #c0392b;
+  color: #fff;
+}
+
+.animation-keyframe-remove:disabled,
+.animation-keyframe-select:disabled,
+.animation-keyframe-time:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.animation-keyframe-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: none;
+  border: 1px dashed #3a6df0;
+  border-radius: 6px;
+  color: #3a6df0;
+  font-size: 12px;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.animation-keyframe-add:hover {
+  background: #202839;
+}
+
+.animation-keyframe-add:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* CutsceneStudio.tsx — replaces Toolbar/Hierarchy/Inspector/AnimationPanel/
+   SnapBar/AssetBrowser while open (see App.tsx), so it reuses their exact
+   anchor points instead of one opaque full-screen overlay: header where the
+   Toolbar sits, tracks where Hierarchy sits, keyframes where the Inspector/
+   AnimationPanel sit, transport where SnapBar sits. The Canvas underneath
+   stays interactive in the space between them. */
+.cutscene-studio-header {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(26, 29, 34, 0.92);
+  backdrop-filter: blur(6px);
+  border: 1px solid #33373f;
+  border-radius: 999px;
+  padding: 8px 8px 8px 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  z-index: 10;
+}
+
+.cutscene-studio-name {
+  background: transparent;
+  border: none;
+  color: #e4e6eb;
+  font-size: 14px;
+  font-weight: 600;
+  width: 160px;
+}
+
+.cutscene-studio-close {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #23262d;
+  border: 1px solid #33373f;
+  border-radius: 999px;
+  color: #c9cdd4;
+  font-size: 12px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.cutscene-studio-close:hover {
+  background: #2c3038;
+}
+
+.cutscene-studio-tracks {
+  left: 12px;
+}
+
+.cutscene-studio-keyframes {
+  right: 12px;
+}
+
+.cutscene-track-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  background: #23262d;
+  border: 1px solid #33373f;
+  border-radius: 6px;
+  color: #c9cdd4;
+  font-size: 12px;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.cutscene-track-row:hover {
+  background: #2c3038;
+}
+
+.cutscene-track-row.active {
+  border-color: #3a6df0;
+  color: #e4e6eb;
+}
+
+.cutscene-track-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cutscene-studio-transport {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(420px, calc(100% - 40px));
+  background: rgba(26, 29, 34, 0.92);
+  backdrop-filter: blur(6px);
+  border: 1px solid #33373f;
+  border-radius: 10px;
+  padding: 10px 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.cutscene-studio-transport .field-row {
+  padding-top: 0;
+  border-top: none;
+}
+
 .scenes-section {
   margin-bottom: 16px;
   padding-bottom: 14px;

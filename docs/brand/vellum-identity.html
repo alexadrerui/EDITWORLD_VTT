@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vellum — Identidade Visual</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root{
+  /* ---- Paleta Vellum ---- */
+  --abyss:      #0A1620;  /* fundo mais profundo  */
+  --deep:       #0F2233;  /* superfície elevada   */
+  --shelf:      #16324A;  /* bordas / divisórias  */
+  --iron:       #1C1814;  /* tinta ferro-gálica   */
+  --vellum-100: #F4EBD9;  /* pergaminho claro     */
+  --vellum-200: #E4D5B7;  /* pergaminho médio     */
+  --vellum-300: #C1AC85;  /* pergaminho envelhec. */
+  --verdigris:  #4E9A8F;  /* ação primária        */
+  --verdigris-d:#2E6B62;
+  --cinnabar:   #C0442F;  /* rubricação / perigo  */
+  --gold:       #C9A227;  /* seleção / destaque   */
+
+  --serif: 'Cormorant Garamond', 'Iowan Old Style', Georgia, serif;
+  --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--abyss); color:var(--vellum-200);
+  font-family:var(--sans); font-size:15px; line-height:1.6;
+  padding:56px 32px 96px;
+}
+.wrap{max-width:1040px; margin:0 auto}
+h1,h2,h3{font-weight:400; margin:0}
+.eyebrow{
+  font-family:var(--mono); font-size:11px; letter-spacing:.18em;
+  text-transform:uppercase; color:var(--verdigris); margin-bottom:10px;
+}
+.hero-title{font-family:var(--serif); font-size:76px; letter-spacing:.34em; color:var(--vellum-100); line-height:1}
+.hero-sub{font-family:var(--serif); font-style:italic; font-size:22px; color:var(--vellum-300); margin-top:16px}
+.lead{max-width:62ch; color:var(--vellum-300); margin-top:20px}
+
+section{margin-top:72px; border-top:1px solid var(--shelf); padding-top:36px}
+section > h2{
+  font-family:var(--serif); font-size:30px; color:var(--vellum-100); margin-bottom:6px;
+}
+section > p.note{color:var(--vellum-300); max-width:66ch; margin:0 0 28px}
+
+.grid{display:grid; gap:20px}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g2{grid-template-columns:repeat(2,1fr)}
+@media(max-width:820px){.g3,.g2{grid-template-columns:1fr}}
+
+.card{
+  background:var(--deep); border:1px solid var(--shelf); border-radius:6px;
+  padding:24px; display:flex; flex-direction:column; gap:14px;
+}
+.card .art{display:flex; align-items:center; justify-content:center; padding:8px 0}
+.card h3{font-family:var(--serif); font-size:21px; color:var(--vellum-100)}
+.card p{margin:0; font-size:13.5px; color:var(--vellum-300); line-height:1.55}
+.tag{
+  font-family:var(--mono); font-size:10px; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--verdigris); border:1px solid var(--verdigris-d); border-radius:3px;
+  padding:3px 7px; align-self:flex-start;
+}
+
+/* paleta */
+.swatches{display:grid; grid-template-columns:repeat(4,1fr); gap:14px}
+@media(max-width:820px){.swatches{grid-template-columns:repeat(2,1fr)}}
+.sw{border:1px solid var(--shelf); border-radius:5px; overflow:hidden}
+.sw .chip{height:88px}
+.sw .meta{padding:11px 13px; background:var(--deep)}
+.sw .nm{font-size:13px; color:var(--vellum-100)}
+.sw .hx{font-family:var(--mono); font-size:11px; color:var(--vellum-300); margin-top:2px}
+.sw .rl{font-size:11.5px; color:var(--vellum-300); opacity:.75; margin-top:5px; line-height:1.4}
+
+/* tipografia */
+.type-row{border-bottom:1px solid var(--shelf); padding:20px 0; display:flex; gap:28px; align-items:baseline; flex-wrap:wrap}
+.type-row:last-child{border-bottom:0}
+.type-label{font-family:var(--mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--verdigris); width:150px; flex:none}
+.type-spec{font-family:var(--mono); font-size:11px; color:var(--vellum-300); margin-left:auto}
+
+/* mock da UI */
+.mock{
+  border:1px solid var(--shelf); border-radius:7px; overflow:hidden;
+  background:var(--abyss); font-size:12px;
+}
+.mock-top{
+  display:flex; align-items:center; gap:14px; padding:9px 14px;
+  background:var(--deep); border-bottom:1px solid var(--shelf);
+}
+.mock-mark{font-family:var(--serif); letter-spacing:.28em; font-size:14px; color:var(--vellum-100)}
+.mock-menu{display:flex; gap:16px; color:var(--vellum-300); font-size:11.5px}
+.mock-btn{
+  margin-left:auto; background:var(--verdigris); color:#06120F; border-radius:4px;
+  padding:4px 12px; font-size:11.5px; font-weight:500;
+}
+.mock-body{display:grid; grid-template-columns:186px 1fr 200px; min-height:330px}
+.panel{background:var(--deep); padding:13px}
+.panel + .viewport{border-left:1px solid var(--shelf)}
+.viewport{position:relative; background:var(--abyss); border-right:1px solid var(--shelf); overflow:hidden}
+.panel-title{
+  font-family:var(--mono); font-size:9.5px; letter-spacing:.15em; text-transform:uppercase;
+  color:var(--verdigris); margin-bottom:11px;
+}
+.tree-item{padding:4px 7px; border-radius:3px; color:var(--vellum-300); font-size:11.5px}
+.tree-item.sel{background:rgba(201,162,39,.14); color:var(--vellum-100); box-shadow:inset 2px 0 0 var(--gold)}
+.tree-item.ind{padding-left:20px}
+.field{display:flex; justify-content:space-between; align-items:center; margin-bottom:7px; font-size:11px}
+.field span{color:var(--vellum-300)}
+.field b{
+  font-family:var(--mono); font-weight:400; color:var(--vellum-100);
+  background:var(--abyss); border:1px solid var(--shelf); border-radius:3px; padding:2px 8px;
+}
+.empty-note{
+  position:absolute; left:50%; top:58%; transform:translate(-50%,-50%); text-align:center;
+  font-family:var(--serif); font-style:italic; color:var(--vellum-300); opacity:.5; font-size:15px;
+}
+
+/* voz */
+table{width:100%; border-collapse:collapse; font-size:13.5px}
+th,td{text-align:left; padding:11px 14px; border-bottom:1px solid var(--shelf); vertical-align:top}
+th{font-family:var(--mono); font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--verdigris); font-weight:400}
+td.k{font-family:var(--mono); font-size:12px; color:var(--vellum-100); white-space:nowrap}
+td.v{color:var(--vellum-300)}
+
+.rules{display:grid; grid-template-columns:1fr 1fr; gap:20px}
+@media(max-width:820px){.rules{grid-template-columns:1fr}}
+.rule{border:1px solid var(--shelf); border-radius:6px; padding:20px; background:var(--deep)}
+.rule h3{font-family:var(--mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase; margin-bottom:12px}
+.rule.do h3{color:var(--verdigris)}
+.rule.dont h3{color:var(--cinnabar)}
+.rule ul{margin:0; padding-left:17px; color:var(--vellum-300); font-size:13.5px; line-height:1.75}
+
+footer{margin-top:72px; border-top:1px solid var(--shelf); padding-top:22px;
+  font-family:var(--mono); font-size:11px; color:var(--vellum-300); opacity:.6}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Identidade visual · v0.1</div>
+    <h1 class="hero-title">VELLUM</h1>
+    <div class="hero-sub">Hic sunt dracones</div>
+    <p class="lead">
+      Vellum é o pergaminho — a superfície onde o mundo ainda não existe. O kraken é o que habita
+      as bordas do mapa, onde o cartógrafo parou de desenhar. A marca vive nessa tensão:
+      <strong style="color:var(--vellum-100);font-weight:500">ferramenta de precisão de um lado, território desconhecido do outro.</strong>
+      Nada de fantasia genérica: a referência é cartografia náutica dos séculos XV–XVII e as sagas nórdicas
+      onde o <em>hafgufa</em> foi descrito pela primeira vez.
+    </p>
+  </header>
+
+  <!-- ============ SÍMBOLO ============ -->
+  <section>
+    <h2>Símbolo</h2>
+    <p class="note">Três direções para a marca. Todas usam o mesmo tentáculo espiralado — a diferença está
+      no que ele encontra: um selo, uma página ou uma letra.</p>
+
+    <div class="grid g3">
+      <div class="card">
+        <div class="art"><svg id="mark-seal" viewBox="0 0 120 120" width="180" height="180" role="img" aria-label="Marca do selo"></svg></div>
+        <span class="tag">A · O Selo</span>
+        <h3>Selo de cera</h3>
+        <p>Anel duplo de selo lacrado com o tentáculo enrolado dentro. Lê bem em 16px, funciona como
+          favicon e como marca d'água no canto do viewport. A escolha mais institucional.</p>
+      </div>
+
+      <div class="card">
+        <div class="art"><svg id="mark-margin" viewBox="0 0 120 120" width="180" height="180" role="img" aria-label="Marca da margem"></svg></div>
+        <span class="tag">B · A Margem</span>
+        <h3>A borda do mapa</h3>
+        <p>O tentáculo invade a página vinda de fora do quadro. É a tradução literal de
+          <em>"aqui há monstros"</em> — e a única das três que conta a história do produto.
+          <strong style="color:var(--vellum-100);font-weight:500">Recomendada.</strong></p>
+      </div>
+
+      <div class="card">
+        <div class="art"><svg id="mark-v" viewBox="0 0 120 120" width="180" height="180" role="img" aria-label="Marca em V"></svg></div>
+        <span class="tag">C · O V</span>
+        <h3>Monograma</h3>
+        <p>Dois braços afilados formando o V. Mais abstrato e mais fácil de licenciar; perde o mito,
+          ganha versatilidade. Bom como marca secundária ou ícone de app.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ LOCKUP ============ -->
+  <section>
+    <h2>Assinatura</h2>
+    <p class="note">O logotipo é composto em Cormorant Garamond, caixa alta, entreletras de 0,30em.
+      O espaçamento largo evoca a folha de rosto de um atlas — e mantém a palavra legível mesmo em corpo pequeno.</p>
+
+    <div class="grid g2">
+      <div class="card" style="align-items:center; justify-content:center; min-height:190px; gap:22px">
+        <svg id="lock-h" viewBox="0 0 340 84" width="330" height="82" role="img" aria-label="Assinatura horizontal"></svg>
+        <span class="tag" style="align-self:center">Horizontal · uso padrão</span>
+      </div>
+      <div class="card" style="align-items:center; justify-content:center; min-height:190px; gap:22px; background:var(--vellum-100)">
+        <svg id="lock-v" viewBox="0 0 200 150" width="185" height="139" role="img" aria-label="Assinatura vertical sobre pergaminho"></svg>
+        <span class="tag" style="align-self:center; color:var(--verdigris-d); border-color:var(--vellum-300)">Vertical · sobre pergaminho</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PALETA ============ -->
+  <section>
+    <h2>Paleta</h2>
+    <p class="note">Duas famílias em oposição: o pergaminho (quente, seco, de papel) e o abismo (frio, molhado, profundo).
+      Verdigris e cinábrio não são escolhas decorativas — são literalmente os pigmentos que os cartógrafos usavam
+      para verde e vermelho antes dos corantes sintéticos.</p>
+
+    <div class="swatches">
+      <div class="sw"><div class="chip" style="background:#F4EBD9"></div><div class="meta">
+        <div class="nm">Vellum 100</div><div class="hx">#F4EBD9</div><div class="rl">Texto primário no escuro · fundo de documentos</div></div></div>
+      <div class="sw"><div class="chip" style="background:#E4D5B7"></div><div class="meta">
+        <div class="nm">Vellum 200</div><div class="hx">#E4D5B7</div><div class="rl">Texto de interface, estado padrão</div></div></div>
+      <div class="sw"><div class="chip" style="background:#C1AC85"></div><div class="meta">
+        <div class="nm">Vellum 300</div><div class="hx">#C1AC85</div><div class="rl">Texto secundário, legendas, rótulos</div></div></div>
+      <div class="sw"><div class="chip" style="background:#1C1814"></div><div class="meta">
+        <div class="nm">Tinta ferro-gálica</div><div class="hx">#1C1814</div><div class="rl">Preto quente · traço sobre pergaminho</div></div></div>
+
+      <div class="sw"><div class="chip" style="background:#0A1620"></div><div class="meta">
+        <div class="nm">Abismo</div><div class="hx">#0A1620</div><div class="rl">Fundo do viewport 3D</div></div></div>
+      <div class="sw"><div class="chip" style="background:#0F2233"></div><div class="meta">
+        <div class="nm">Profundo</div><div class="hx">#0F2233</div><div class="rl">Painéis, barras, superfícies elevadas</div></div></div>
+      <div class="sw"><div class="chip" style="background:#16324A"></div><div class="meta">
+        <div class="nm">Plataforma</div><div class="hx">#16324A</div><div class="rl">Bordas, divisórias, linhas do grid</div></div></div>
+      <div class="sw"><div class="chip" style="background:#4E9A8F"></div><div class="meta">
+        <div class="nm">Verdigris</div><div class="hx">#4E9A8F</div><div class="rl">Ação primária · eixo Z · links</div></div></div>
+
+      <div class="sw"><div class="chip" style="background:#C0442F"></div><div class="meta">
+        <div class="nm">Cinábrio</div><div class="hx">#C0442F</div><div class="rl">Destrutivo · eixo X · rubricação</div></div></div>
+      <div class="sw"><div class="chip" style="background:#C9A227"></div><div class="meta">
+        <div class="nm">Folha de ouro</div><div class="hx">#C9A227</div><div class="rl">Seleção · gizmo ativo · eixo Y</div></div></div>
+    </div>
+  </section>
+
+  <!-- ============ TIPOGRAFIA ============ -->
+  <section>
+    <h2>Tipografia</h2>
+    <p class="note">Uma serifada de alto contraste para a marca e os títulos; uma grotesca neutra para tudo
+      que o usuário precisa ler rápido. Números sempre em monoespaçada — coordenadas não podem dançar
+      enquanto o usuário arrasta um gizmo.</p>
+
+    <div class="type-row">
+      <div class="type-label">Marca</div>
+      <div style="font-family:var(--serif); font-size:38px; letter-spacing:.30em; color:var(--vellum-100)">VELLUM</div>
+      <div class="type-spec">Cormorant Garamond 300 · tracking .30em</div>
+    </div>
+    <div class="type-row">
+      <div class="type-label">Display</div>
+      <div style="font-family:var(--serif); font-size:32px; color:var(--vellum-100)">Aqui há monstros</div>
+      <div class="type-spec">Cormorant Garamond 400 / 500</div>
+    </div>
+    <div class="type-row">
+      <div class="type-label">Interface</div>
+      <div style="font-family:var(--sans); font-size:16px; color:var(--vellum-200)">Adicionar primitiva ao cenário</div>
+      <div class="type-spec">Inter 400 / 500 / 600 · 11–16px</div>
+    </div>
+    <div class="type-row">
+      <div class="type-label">Numérico</div>
+      <div style="font-family:var(--mono); font-size:16px; color:var(--vellum-100)">X −12.480 &nbsp; Y 0.000 &nbsp; Z 34.125</div>
+      <div class="type-spec">JetBrains Mono 400 · tabular</div>
+    </div>
+  </section>
+
+  <!-- ============ UI ============ -->
+  <section>
+    <h2>Aplicação na interface</h2>
+    <p class="note">O editor é escuro por padrão — o pergaminho não é o fundo da tela, é a cena que você constrói.
+      A cor só aparece onde há significado: verdigris para ações, ouro para seleção, cinábrio para o que destrói.</p>
+
+    <div class="mock">
+      <div class="mock-top">
+        <svg id="mark-top" viewBox="0 0 120 120" width="21" height="21" aria-hidden="true"></svg>
+        <div class="mock-mark">VELLUM</div>
+        <div class="mock-menu"><span>Cena</span><span>Adicionar</span><span>Vista</span><span>Ajuda</span></div>
+        <div class="mock-btn">Salvar cena</div>
+      </div>
+      <div class="mock-body">
+        <div class="panel">
+          <div class="panel-title">Hierarquia</div>
+          <div class="tree-item">◆ Terreno</div>
+          <div class="tree-item ind">Plano base</div>
+          <div class="tree-item ind sel">Penhasco norte</div>
+          <div class="tree-item ind">Ponte</div>
+          <div class="tree-item">◆ Iluminação</div>
+          <div class="tree-item ind">Sol</div>
+          <div class="tree-item ind">Tocha 01</div>
+        </div>
+        <div class="viewport">
+          <svg id="vp" viewBox="0 0 520 330" preserveAspectRatio="xMidYMid slice"
+               style="position:absolute;inset:0;width:100%;height:100%" aria-hidden="true"></svg>
+          <div class="empty-note">terra incognita</div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">Inspetor</div>
+          <div class="field"><span>Posição X</span><b>-12.48</b></div>
+          <div class="field"><span>Posição Y</span><b>0.00</b></div>
+          <div class="field"><span>Posição Z</span><b>34.12</b></div>
+          <div class="field"><span>Escala</span><b>1.000</b></div>
+          <div class="field"><span>Opacidade</span><b>100%</b></div>
+          <div style="margin-top:16px; text-align:center; border:1px solid var(--cinnabar); color:var(--cinnabar);
+                      border-radius:4px; padding:5px; font-size:11px">Remover objeto</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ VOZ ============ -->
+  <section>
+    <h2>Voz e sistema de nomes</h2>
+    <p class="note">A mitologia não fica só no logo. Ela dá nome às partes do sistema — o que torna o produto
+      memorável e a documentação divertida de escrever, sem nunca atrapalhar quem só quer mover um cubo.</p>
+
+    <table>
+      <tr><th style="width:180px">Nome</th><th style="width:150px">O que é</th><th>Por quê</th></tr>
+      <tr><td class="k">Vellum</td><td class="v">O editor</td>
+        <td class="v">O pergaminho onde se desenha. É o produto que o usuário abre.</td></tr>
+      <tr><td class="k">Kraken</td><td class="v">Runtime / engine do VTT</td>
+        <td class="v">O que roda a mesa ao vivo — o motor sob a superfície.</td></tr>
+      <tr><td class="k">Terra Incognita</td><td class="v">Cena vazia</td>
+        <td class="v">Estado inicial do viewport, antes do primeiro objeto.</td></tr>
+      <tr><td class="k">Lyngbakr</td><td class="v">Sistema de terreno</td>
+        <td class="v">Da saga: a ilha que era, na verdade, uma criatura viva. O terreno é o corpo do mundo.</td></tr>
+      <tr><td class="k">Hafgufa</td><td class="v">Névoa / fog e atmosfera</td>
+        <td class="v">Nome nórdico original do kraken: literalmente "a névoa do mar".</td></tr>
+      <tr><td class="k">Fathom</td><td class="v">Unidade / grid de medida</td>
+        <td class="v">Braça — a medida náutica de profundidade. Cabe perfeitamente em um editor 3D.</td></tr>
+      <tr><td class="k">Marginalia</td><td class="v">Anotações e notas de mestre</td>
+        <td class="v">O que se escrevia na margem do manuscrito. Notas do GM na borda do mapa.</td></tr>
+    </table>
+
+    <p class="note" style="margin-top:28px">
+      <strong style="color:var(--vellum-100);font-weight:500">Tom:</strong> seco e preciso na interface,
+      lírico apenas nas bordas — estado vazio, tela de carregamento, changelog, página inicial.
+      Um botão nunca diz "Invocar o abismo". Ele diz "Adicionar cubo".
+    </p>
+  </section>
+
+  <!-- ============ REGRAS ============ -->
+  <section>
+    <h2>Regras</h2>
+    <div class="rules">
+      <div class="rule do">
+        <h3>Faça</h3>
+        <ul>
+          <li>Deixe o tentáculo sangrar para fora do quadro — a força da marca está no que não cabe.</li>
+          <li>Use a serifada só para marca e títulos. Interface é Inter, sempre.</li>
+          <li>Mantenha 90% da tela em neutros; a cor é informação, não decoração.</li>
+          <li>Reserve o ouro exclusivamente para seleção. Se tudo brilha, nada brilha.</li>
+          <li>Área de proteção mínima ao redor do logo: a altura do "V".</li>
+        </ul>
+      </div>
+      <div class="rule dont">
+        <h3>Não faça</h3>
+        <ul>
+          <li>Nada de gradientes, brilhos, bisel ou textura de papel amassado. A marca é traço, não render.</li>
+          <li>Não desenhe o kraken inteiro — olhos, bico, cabeça. Um tentáculo sugere; a criatura completa vira mascote.</li>
+          <li>Não use fontes "medievais" góticas ou de fantasia. O contraponto moderno é o que salva o conceito.</li>
+          <li>Não gire nem incline o logotipo. Não altere o entreletras.</li>
+          <li>Não aplique o símbolo em ciano/roxo "gamer". Fora da paleta, a marca some.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <footer>VELLUM · guia de identidade v0.1 · gerado para EDITWORLD_VTT</footer>
+</div>
+
+<script>
+/* ---------- gerador de tentáculos ---------- */
+function taper(c, wf, N){
+  N = N || 170;
+  const P = [];
+  for(let i=0;i<=N;i++) P.push(c(i/N));
+  const L=[], R=[];
+  for(let i=0;i<=N;i++){
+    const a=P[Math.max(0,i-1)], b=P[Math.min(N,i+1)];
+    let dx=b.x-a.x, dy=b.y-a.y;
+    const l=Math.hypot(dx,dy)||1; dx/=l; dy/=l;
+    const w=wf(i/N)/2;
+    L.push([P[i].x-dy*w, P[i].y+dx*w]);
+    R.push([P[i].x+dy*w, P[i].y-dx*w]);
+  }
+  R.reverse();
+  const f=p=>p[0].toFixed(2)+','+p[1].toFixed(2);
+  return 'M'+L.map(f).join('L')+'L'+R.map(f).join('L')+'Z';
+}
+function suckers(c, wf, n, side, from, to, k){
+  let s='';
+  for(let i=0;i<n;i++){
+    const t = from + (to-from)*(n===1?0:i/(n-1));
+    const p=c(t);
+    const a=c(Math.max(0,t-.008)), b=c(Math.min(1,t+.008));
+    let dx=b.x-a.x, dy=b.y-a.y;
+    const l=Math.hypot(dx,dy)||1; dx/=l; dy/=l;
+    const w=wf(t)/2, off=w*.34*side, r=Math.max(.34, w*(k||.26));
+    s+='<circle cx="'+(p.x-dy*off).toFixed(2)+'" cy="'+(p.y+dx*off).toFixed(2)+'" r="'+r.toFixed(2)+'"/>';
+  }
+  return s;
+}
+function spiral(cx,cy,r0,k,t0,t1){
+  return t=>{ const th=t0+(t1-t0)*t, r=r0*Math.exp(-k*(th-t0));
+    return {x:cx+r*Math.cos(th), y:cy+r*Math.sin(th)}; };
+}
+function bez(p0,p1,p2,p3){
+  return t=>{ const u=1-t, a=u*u*u, b=3*u*u*t, c=3*u*t*t, d=t*t*t;
+    return {x:a*p0[0]+b*p1[0]+c*p2[0]+d*p3[0], y:a*p0[1]+b*p1[1]+c*p2[1]+d*p3[1]}; };
+}
+
+/* ---------- marcas ---------- */
+function markSeal(ink, accent){
+  const c = spiral(60,60, 37, .21, 2.15, 2.15+3.5*Math.PI);
+  const w = t => 12.5*Math.pow(1-t,1.05) + .8;
+  return '<g fill="none" stroke="'+ink+'">'
+    + '<circle cx="60" cy="60" r="52.5" stroke-width="2.6"/>'
+    + '<circle cx="60" cy="60" r="46.5" stroke-width="1"/>'
+    + '</g>'
+    + '<path d="'+taper(c,w)+'" fill="'+ink+'"/>'
+    + '<g fill="'+accent+'" opacity=".92">'+suckers(c,w,15,1,.05,.82)+'</g>';
+}
+function markMargin(ink, page, accent){
+  const c = spiral(86,60, 61, .32, -1.02, -1.02+3.2*Math.PI);
+  const w = t => 15*Math.pow(1-t,1.0) + .7;
+  return '<rect x="15" y="16" width="82" height="90" rx="2.5" fill="'+page+'" stroke="'+ink+'" stroke-width="2.2"/>'
+    + '<g stroke="'+ink+'" stroke-width=".7" opacity=".28">'
+    +   '<path d="M15 40H97M15 62H97M15 84H97M37 16V106M59 16V106M77 16V106"/>'
+    + '</g>'
+    + '<path d="'+taper(c,w)+'" fill="'+ink+'"/>'
+    + '<g fill="'+accent+'" opacity=".9">'+suckers(c,w,16,1,.06,.86)+'</g>';
+}
+function markV(ink, accent){
+  const cl = bez([15,25],[21,8],[41,45],[60,95]);
+  const cr = bez([105,25],[99,8],[79,45],[60,95]);
+  const w  = t => 2.6 + 11.5*Math.pow(t,.85);
+  return '<path d="'+taper(cl,w)+'" fill="'+ink+'"/>'
+    + '<path d="'+taper(cr,w)+'" fill="'+ink+'"/>'
+    + '<g fill="'+accent+'" opacity=".9">'
+    +   suckers(cl,w,9,-1,.24,.94,.24) + suckers(cr,w,9,1,.24,.94,.24)
+    + '</g>';
+}
+
+/* ---------- assinaturas ---------- */
+function wordmark(x,y,size,fill,extra){
+  return '<text x="'+x+'" y="'+y+'" fill="'+fill+'" font-family="Cormorant Garamond, Georgia, serif" '
+    + 'font-size="'+size+'" font-weight="300" letter-spacing="'+(size*.30).toFixed(2)+'" '
+    + (extra||'') + '>VELLUM</text>';
+}
+
+const VEL='#F4EBD9', ABY='#0A1620', VERD='#4E9A8F', INK='#1C1814', P200='#E4D5B7', P300='#C1AC85';
+
+document.getElementById('mark-seal').innerHTML   = markSeal(VEL, ABY);
+document.getElementById('mark-margin').innerHTML = markMargin(VEL, ABY, ABY);
+document.getElementById('mark-v').innerHTML      = markV(VEL, ABY);
+document.getElementById('mark-top').innerHTML    = markMargin(VEL, '#0F2233', '#0F2233');
+
+document.getElementById('lock-h').innerHTML =
+  '<g transform="translate(4,6) scale(.6)">'+markMargin(VEL,ABY,ABY)+'</g>'
+  + wordmark(88, 52, 34, VEL)
+  + '<text x="90" y="70" fill="'+P300+'" font-family="Cormorant Garamond, Georgia, serif" '
+  + 'font-size="13" font-style="italic">hic sunt dracones</text>';
+
+document.getElementById('lock-v').innerHTML =
+  '<g transform="translate(70,2) scale(.51)">'+markMargin(INK,'#F4EBD9','#F4EBD9')+'</g>'
+  + wordmark(100, 106, 27, INK, 'text-anchor="middle" transform="translate(11,0)"')
+  + '<text x="100" y="126" fill="#8A7B5E" font-family="Cormorant Garamond, Georgia, serif" '
+  + 'font-size="12" font-style="italic" text-anchor="middle">hic sunt dracones</text>';
+
+/* ---------- viewport: grid em perspectiva + silhueta ---------- */
+(function(){
+  const H=[], V=[];
+  for(let i=0;i<=14;i++){
+    const t=i/14, y=182 + Math.pow(t,2.15)*148;
+    H.push('M0 '+y.toFixed(1)+'H520');
+  }
+  for(let i=-11;i<=11;i++){
+    V.push('M'+(260+i*13).toFixed(1)+' 182L'+(260+i*118).toFixed(1)+' 330');
+  }
+  const c = spiral(150,250, 150, .40, -1.35, -1.35+2.6*Math.PI);
+  const w = t => 34*Math.pow(1-t,1.0)+1;
+  document.getElementById('vp').innerHTML =
+      '<rect width="520" height="330" fill="#0A1620"/>'
+    + '<path d="'+taper(c,w)+'" fill="#16324A" opacity=".40"/>'
+    + '<g stroke="#16324A" stroke-width=".8" fill="none" opacity=".62">'
+    +   '<path d="'+H.join('')+'"/><path d="'+V.join('')+'"/>'
+    + '</g>'
+    + '<path d="M0 182H520" stroke="#4E9A8F" stroke-width="1" opacity=".5"/>';
+})();
+</script>
+</body>
+</html>

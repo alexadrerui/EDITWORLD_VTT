@@ -25,6 +25,7 @@ import {
 import { SceneObjects } from './SceneObjects'
 import { useAudioBuffer } from './assetLoaders'
 import { globalAudioListener } from './audioListener'
+import { useCutscenePreview } from '../animation/cutsceneEngine'
 import { useEditorStore } from '../state/useEditorStore'
 import type { AxisView } from '../types'
 
@@ -417,6 +418,15 @@ function CameraRig({ orbitControlsRef }: { orbitControlsRef: RefObject<any> }) {
 // never autoplays on scene load, only plays while the SceneInspector's "▶
 // Testar" button is toggled on. Plays through the same shared AudioListener
 // as every positional soundSource (see audioListener.ts).
+// Mounted once (below, alongside BloomPipeline/SunCSM/BackgroundMusic) so
+// useCutscenePreview's shared timeline has a single owner regardless of
+// which/how-many objects a Cutscene's tracks reference — see
+// cutsceneEngine.ts. Renders nothing itself, purely a side-effect hook.
+function CutscenePreviewDriver() {
+  useCutscenePreview()
+  return null
+}
+
 function BackgroundMusic() {
   const sceneSettings = useEditorStore((s) => s.sceneSettings)
   const testing = useEditorStore((s) => s.testingBackgroundMusic)
@@ -521,6 +531,7 @@ export function Editor3D() {
       <BloomPipeline />
       <SunCSM sunRef={sunRef} enabled={csmActive} mapSize={shadowMapSize} />
       <BackgroundMusic />
+      <CutscenePreviewDriver />
       <ambientLight intensity={sceneSettings.ambientIntensity} />
       <directionalLight
         ref={sunRef}

@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 import type {
+  AnimationClip,
+  AnimationKeyframe,
   AssetBrowserTab,
   AssetFolder,
   AssetFolderTab,
@@ -8,6 +10,8 @@ import type {
   AxisView,
   CustomAsset,
   CustomAssetPart,
+  Cutscene,
+  CutsceneTrack,
   GizmoSpace,
   GraphicsQuality,
   GridStyle,
@@ -123,10 +127,18 @@ interface SceneData {
   objects: SceneObject[]
   groups: SceneGroup[]
   settings: SceneSettings
+  animations: AnimationClip[]
+  cutscenes: Cutscene[]
 }
 
 function loadSceneData(id: string): SceneData {
-  const empty = { objects: [], groups: [], settings: DEFAULT_SCENE_SETTINGS }
+  const empty = {
+    objects: [],
+    groups: [],
+    settings: DEFAULT_SCENE_SETTINGS,
+    animations: [],
+    cutscenes: [],
+  }
   try {
     const raw = localStorage.getItem(sceneDataKey(id))
     if (!raw) return empty
@@ -135,6 +147,9 @@ function loadSceneData(id: string): SceneData {
     const rawObjects = Array.isArray(parsed) ? parsed : ((parsed as SceneData).objects ?? [])
     const rawGroups = Array.isArray(parsed) ? [] : ((parsed as SceneData).groups ?? [])
     const rawSettings = Array.isArray(parsed) ? {} : ((parsed as SceneData).settings ?? {})
+    // Older saves predate animations/cutscenes entirely — default to none.
+    const rawAnimations = Array.isArray(parsed) ? [] : ((parsed as SceneData).animations ?? [])
+    const rawCutscenes = Array.isArray(parsed) ? [] : ((parsed as SceneData).cutscenes ?? [])
     const objects = (rawObjects as Array<Partial<SceneObject>>).map(
       (o) =>
         ({
@@ -157,6 +172,7 @@ function loadSceneData(id: string): SceneData {
           weatheringColor: '#2b2118',
           colorMapAssetId: null,
           videoMapAssetId: null,
+          animationId: null,
           ...LIGHT_DEFAULTS,
           ...SOUND_DEFAULTS,
           ...o,
@@ -166,7 +182,9 @@ function loadSceneData(id: string): SceneData {
       (g) => ({ locked: false, hidden: false, ...g }) as SceneGroup,
     )
     const settings = { ...DEFAULT_SCENE_SETTINGS, ...rawSettings }
-    return { objects, groups, settings }
+    const animations = rawAnimations as AnimationClip[]
+    const cutscenes = rawCutscenes as Cutscene[]
+    return { objects, groups, settings, animations, cutscenes }
   } catch {
     return empty
   }
@@ -267,6 +285,7 @@ function createPrimitive(kind: PrimitiveKind, overrides?: Partial<SceneObject>):
     weatheringColor: '#2b2118',
     colorMapAssetId: null,
     videoMapAssetId: null,
+    animationId: null,
     ...LIGHT_DEFAULTS,
     ...SOUND_DEFAULTS,
     // Directional lights have no distance falloff, so the shared light
@@ -294,6 +313,15 @@ interface EditorState {
   objects: SceneObject[]
   groups: SceneGroup[]
   sceneSettings: SceneSettings
+  // Keyframe animation clips — see AnimationClip in types.ts. Same "separate
+  // collection + xId reference" shape as groups/groupId, saved/loaded with
+  // the rest of SceneData.
+  animations: AnimationClip[]
+  // Multi-object choreographed sequences — see Cutscene in types.ts. Separate
+  // from `animations` above (that system stays "one clip per object"); a
+  // cutscene's tracks reference objects by id instead. Saved/loaded with the
+  // rest of SceneData, same as animations/groups.
+  cutscenes: Cutscene[]
   selectedIds: string[]
   // Metadata only (no blob) — hydrated asynchronously from IndexedDB right
   // after this store is created (see the listAssets().then(...) call below
@@ -310,6 +338,27 @@ interface EditorState {
   // store-bridge that lets the Inspector (outside the Canvas) start/stop it.
   testingSoundId: string | null
   testingBackgroundMusic: boolean
+  // Animation editing/preview state — same "ephemeral, not persisted or
+  // undoable" bucket as testingSoundId above. `editingAnimationClipId` also
+  // doubles as "is AnimationPanel.tsx open" (no separate boolean).
+  // `editingKeyframeId`, when set, is the keyframe that the selected
+  // object's transform gizmo/Vector3Row edits currently mirror into (see
+  // Inspector.tsx). `testingAnimationId`/`animationPlaying`/
+  // `animationScrubTime` bridge the panel's transport controls to the actual
+  // anime.js timeline owned inside the Canvas (see animationEngine.ts).
+  editingAnimationClipId: string | null
+  editingKeyframeId: string | null
+  testingAnimationId: string | null
+  animationPlaying: boolean
+  animationScrubTime: number
+  // Cutscene editing/preview state — same ephemeral/non-undoable shape as
+  // the animation fields above, just for CutsceneStudio.tsx instead of
+  // AnimationPanel.tsx. `editingCutsceneId` doubles as "is the studio open."
+  editingCutsceneId: string | null
+  editingCutsceneKeyframeId: string | null
+  testingCutsceneId: string | null
+  cutscenePlaying: boolean
+  cutsceneScrubTime: number
   transformMode: TransformMode
   isDirty: boolean
   positionSnap: PositionSnapMode
@@ -385,6 +434,72 @@ interface EditorState {
   importVideo: (file: File, folderId?: string | null) => Promise<AssetMeta>
   toggleSoundTest: (id: string) => void
   toggleBackgroundMusicTest: () => void
+  // Creates a 2-keyframe clip (both = the object's current transform, at
+  // time 0 and 1000ms) and assigns it via the existing updateObject (so that
+  // inner assignment stays undo-covered for free — the clip-creation itself
+  // is not undoable, same bucket as createGroup).
+  createAnimationForObject: (objectId: string) => void
+  // Removes the clip and clears animationId on whichever object referenced
+  // it, plus any ephemeral state pointing at it.
+  deleteAnimation: (clipId: string) => void
+  renameAnimation: (clipId: string, name: string) => void
+  setAnimationLoop: (clipId: string, loop: boolean) => void
+  setAnimationEasing: (clipId: string, easing: string) => void
+  // Duplicates the last keyframe (by time) at lastTime+500ms and selects it
+  // for editing.
+  addKeyframe: (clipId: string) => void
+  // No-op if it would leave fewer than 2 keyframes (a clip needs at least a
+  // start and end pose).
+  removeKeyframe: (clipId: string, keyframeId: string) => void
+  updateKeyframe: (clipId: string, keyframeId: string, patch: Partial<AnimationKeyframe>) => void
+  // Sets which keyframe the gizmo/Vector3Row transform edits mirror into (see
+  // Inspector.tsx), and snaps the object's live transform to that keyframe's
+  // pose so it's visible/grabbable in the viewport — via a non-undoable
+  // internal setter, same bucket as toggleLocked, so browsing keyframes
+  // doesn't spam the undo stack. Pass null to stop editing.
+  selectKeyframeForEditing: (clipId: string, keyframeId: string | null) => void
+  toggleAnimationTest: (clipId: string) => void
+  toggleAnimationPlaying: () => void
+  setAnimationScrubTime: (ms: number) => void
+  // Closes AnimationPanel.tsx entirely (clears both ids, not just the
+  // keyframe selection) and stops any active preview — the panel's own
+  // close button, distinct from selectKeyframeForEditing(clipId, null)
+  // which keeps the panel open but deselects the active keyframe.
+  closeAnimationPanel: () => void
+  // Cutscene actions — mirror the shape of the animation actions above
+  // exactly, just operating on `cutscenes`/tracks instead of `animations`/
+  // a single object. Creates an empty-tracks cutscene and opens the studio
+  // (editingCutsceneId) immediately — CutsceneStudio.tsx is where tracks/
+  // objects actually get added.
+  createCutscene: (folderId?: string | null) => Cutscene
+  deleteCutscene: (cutsceneId: string) => void
+  renameCutscene: (cutsceneId: string, name: string) => void
+  setCutsceneLoop: (cutsceneId: string, loop: boolean) => void
+  setCutsceneEasing: (cutsceneId: string, easing: string) => void
+  // Adds a track for `objectId` seeded with that object's current transform
+  // as a single keyframe at time 0 — no-op if the object already has a track
+  // in this cutscene.
+  addTrackToCutscene: (cutsceneId: string, objectId: string) => void
+  removeTrackFromCutscene: (cutsceneId: string, trackId: string) => void
+  // Duplicates a track's last keyframe at lastTime+500ms and selects it for
+  // editing — same shape as addKeyframe.
+  addCutsceneKeyframe: (cutsceneId: string, trackId: string) => void
+  removeCutsceneKeyframe: (cutsceneId: string, trackId: string, keyframeId: string) => void
+  updateCutsceneKeyframe: (
+    cutsceneId: string,
+    trackId: string,
+    keyframeId: string,
+    patch: Partial<AnimationKeyframe>,
+  ) => void
+  // Snaps whichever object owns that track to the keyframe's pose (same
+  // non-undoable internal setter as selectKeyframeForEditing). Pass null to
+  // stop editing without closing the studio.
+  selectCutsceneKeyframeForEditing: (cutsceneId: string, keyframeId: string | null) => void
+  toggleCutsceneTest: (cutsceneId: string) => void
+  toggleCutscenePlaying: () => void
+  setCutsceneScrubTime: (ms: number) => void
+  closeCutsceneStudio: () => void
+  moveCutsceneToFolder: (cutsceneId: string, folderId: string | null) => void
   select: (id: string | null) => void
   toggleSelect: (id: string) => void
   setTransformMode: (mode: TransformMode) => void
@@ -436,10 +551,22 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   objects: initialSceneData.objects,
   groups: initialSceneData.groups,
   sceneSettings: initialSceneData.settings,
+  animations: initialSceneData.animations,
+  cutscenes: initialSceneData.cutscenes,
   selectedIds: [],
   assets: [],
   testingSoundId: null,
   testingBackgroundMusic: false,
+  editingAnimationClipId: null,
+  editingKeyframeId: null,
+  testingAnimationId: null,
+  animationPlaying: false,
+  animationScrubTime: 0,
+  editingCutsceneId: null,
+  editingCutsceneKeyframeId: null,
+  testingCutsceneId: null,
+  cutscenePlaying: false,
+  cutsceneScrubTime: 0,
   transformMode: 'translate',
   isDirty: false,
   positionSnap: null,
@@ -508,7 +635,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       .assets.filter((a) => a.folderId === id)
       .map((a) => a.id)
     const assets = get().assets.map((a) => (a.folderId === id ? { ...a, folderId: null } : a))
-    set({ folders, customAssets, assets })
+    const cutscenes = get().cutscenes.map((c) => (c.folderId === id ? { ...c, folderId: null } : c))
+    set({ folders, customAssets, assets, cutscenes })
     // Fire-and-forget IndexedDB updates to match — the in-memory `assets`
     // state above is what the UI reads, this just keeps the persisted
     // records from disagreeing with it after a reload.
@@ -759,6 +887,376 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   toggleBackgroundMusicTest: () =>
     set((state) => ({ testingBackgroundMusic: !state.testingBackgroundMusic })),
 
+  createAnimationForObject: (objectId) => {
+    const state = get()
+    const object = state.objects.find((o) => o.id === objectId)
+    if (!object) return
+    const clip: AnimationClip = {
+      id: genId('anim'),
+      name: 'Animação',
+      loop: true,
+      easing: 'inOutQuad',
+      keyframes: [
+        {
+          id: genId('kf'),
+          time: 0,
+          position: object.position,
+          rotation: object.rotation,
+          scale: object.scale,
+        },
+        {
+          id: genId('kf'),
+          time: 1000,
+          position: object.position,
+          rotation: object.rotation,
+          scale: object.scale,
+        },
+      ],
+    }
+    set({ animations: [...state.animations, clip] })
+    get().updateObject(objectId, { animationId: clip.id })
+  },
+
+  deleteAnimation: (clipId) => {
+    const state = get()
+    const referencing = state.objects.find((o) => o.animationId === clipId)
+    set({
+      animations: state.animations.filter((a) => a.id !== clipId),
+      editingAnimationClipId: state.editingAnimationClipId === clipId ? null : state.editingAnimationClipId,
+      editingKeyframeId: state.editingAnimationClipId === clipId ? null : state.editingKeyframeId,
+      testingAnimationId: state.testingAnimationId === clipId ? null : state.testingAnimationId,
+      animationPlaying: state.testingAnimationId === clipId ? false : state.animationPlaying,
+      isDirty: true,
+    })
+    if (referencing) get().updateObject(referencing.id, { animationId: null })
+  },
+
+  renameAnimation: (clipId, name) => {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    set((state) => ({
+      animations: state.animations.map((a) => (a.id === clipId ? { ...a, name: trimmed } : a)),
+      isDirty: true,
+    }))
+  },
+
+  setAnimationLoop: (clipId, loop) =>
+    set((state) => ({
+      animations: state.animations.map((a) => (a.id === clipId ? { ...a, loop } : a)),
+      isDirty: true,
+    })),
+
+  setAnimationEasing: (clipId, easing) =>
+    set((state) => ({
+      animations: state.animations.map((a) => (a.id === clipId ? { ...a, easing } : a)),
+      isDirty: true,
+    })),
+
+  addKeyframe: (clipId) => {
+    const state = get()
+    const clip = state.animations.find((a) => a.id === clipId)
+    const object = state.objects.find((o) => o.animationId === clipId)
+    if (!clip || !object) return
+    const lastTime = clip.keyframes.reduce((max, k) => Math.max(max, k.time), 0)
+    const keyframe: AnimationKeyframe = {
+      id: genId('kf'),
+      time: lastTime + 500,
+      position: object.position,
+      rotation: object.rotation,
+      scale: object.scale,
+    }
+    const keyframes = [...clip.keyframes, keyframe].sort((a, b) => a.time - b.time)
+    set({
+      animations: state.animations.map((a) => (a.id === clipId ? { ...a, keyframes } : a)),
+      isDirty: true,
+    })
+    get().selectKeyframeForEditing(clipId, keyframe.id)
+  },
+
+  removeKeyframe: (clipId, keyframeId) => {
+    const state = get()
+    const clip = state.animations.find((a) => a.id === clipId)
+    // A clip needs at least a start and end pose.
+    if (!clip || clip.keyframes.length <= 2) return
+    const keyframes = clip.keyframes.filter((k) => k.id !== keyframeId)
+    set({
+      animations: state.animations.map((a) => (a.id === clipId ? { ...a, keyframes } : a)),
+      editingKeyframeId: state.editingKeyframeId === keyframeId ? null : state.editingKeyframeId,
+      isDirty: true,
+    })
+  },
+
+  updateKeyframe: (clipId, keyframeId, patch) =>
+    set((state) => ({
+      animations: state.animations.map((a) =>
+        a.id === clipId
+          ? { ...a, keyframes: a.keyframes.map((k) => (k.id === keyframeId ? { ...k, ...patch } : k)) }
+          : a,
+      ),
+      isDirty: true,
+    })),
+
+  selectKeyframeForEditing: (clipId, keyframeId) => {
+    if (!keyframeId) {
+      set({ editingAnimationClipId: clipId, editingKeyframeId: null })
+      return
+    }
+    const state = get()
+    const clip = state.animations.find((a) => a.id === clipId)
+    const keyframe = clip?.keyframes.find((k) => k.id === keyframeId)
+    const object = state.objects.find((o) => o.animationId === clipId)
+    if (!clip || !keyframe || !object) return
+    // Snaps the object's transform to the keyframe's pose directly (not
+    // through updateObject) so browsing keyframes doesn't push undo entries
+    // — same non-undoable bucket as toggleLocked/toggleHidden. Still marks
+    // isDirty though (unlike toggleLocked): this changes the object's saved
+    // position/rotation/scale, which is real content, just not something we
+    // want cluttering the undo stack.
+    set({
+      editingAnimationClipId: clipId,
+      editingKeyframeId: keyframeId,
+      isDirty: true,
+      objects: state.objects.map((o) =>
+        o.id === object.id
+          ? { ...o, position: keyframe.position, rotation: keyframe.rotation, scale: keyframe.scale }
+          : o,
+      ),
+    })
+  },
+
+  toggleAnimationTest: (clipId) =>
+    set((state) => {
+      const stopping = state.testingAnimationId === clipId
+      return {
+        testingAnimationId: stopping ? null : clipId,
+        animationPlaying: !stopping,
+        animationScrubTime: 0,
+      }
+    }),
+
+  toggleAnimationPlaying: () => set((state) => ({ animationPlaying: !state.animationPlaying })),
+
+  setAnimationScrubTime: (ms) => set({ animationScrubTime: Math.max(0, ms) }),
+
+  closeAnimationPanel: () =>
+    set({
+      editingAnimationClipId: null,
+      editingKeyframeId: null,
+      testingAnimationId: null,
+      animationPlaying: false,
+    }),
+
+  createCutscene: (folderId) => {
+    const cutscene: Cutscene = {
+      id: genId('cutscene'),
+      name: 'Cutscene',
+      loop: true,
+      easing: 'inOutQuad',
+      tracks: [],
+      folderId: folderId ?? null,
+    }
+    set((state) => ({
+      cutscenes: [...state.cutscenes, cutscene],
+      editingCutsceneId: cutscene.id,
+      isDirty: true,
+    }))
+    return cutscene
+  },
+
+  deleteCutscene: (cutsceneId) =>
+    set((state) => ({
+      cutscenes: state.cutscenes.filter((c) => c.id !== cutsceneId),
+      editingCutsceneId: state.editingCutsceneId === cutsceneId ? null : state.editingCutsceneId,
+      editingCutsceneKeyframeId:
+        state.editingCutsceneId === cutsceneId ? null : state.editingCutsceneKeyframeId,
+      testingCutsceneId: state.testingCutsceneId === cutsceneId ? null : state.testingCutsceneId,
+      cutscenePlaying: state.testingCutsceneId === cutsceneId ? false : state.cutscenePlaying,
+      isDirty: true,
+    })),
+
+  renameCutscene: (cutsceneId, name) => {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    set((state) => ({
+      cutscenes: state.cutscenes.map((c) => (c.id === cutsceneId ? { ...c, name: trimmed } : c)),
+      isDirty: true,
+    }))
+  },
+
+  setCutsceneLoop: (cutsceneId, loop) =>
+    set((state) => ({
+      cutscenes: state.cutscenes.map((c) => (c.id === cutsceneId ? { ...c, loop } : c)),
+      isDirty: true,
+    })),
+
+  setCutsceneEasing: (cutsceneId, easing) =>
+    set((state) => ({
+      cutscenes: state.cutscenes.map((c) => (c.id === cutsceneId ? { ...c, easing } : c)),
+      isDirty: true,
+    })),
+
+  addTrackToCutscene: (cutsceneId, objectId) => {
+    const state = get()
+    const cutscene = state.cutscenes.find((c) => c.id === cutsceneId)
+    const object = state.objects.find((o) => o.id === objectId)
+    if (!cutscene || !object) return
+    if (cutscene.tracks.some((t) => t.objectId === objectId)) return
+    const track: CutsceneTrack = {
+      id: genId('track'),
+      objectId,
+      keyframes: [
+        {
+          id: genId('kf'),
+          time: 0,
+          position: object.position,
+          rotation: object.rotation,
+          scale: object.scale,
+        },
+      ],
+    }
+    set({
+      cutscenes: state.cutscenes.map((c) =>
+        c.id === cutsceneId ? { ...c, tracks: [...c.tracks, track] } : c,
+      ),
+      isDirty: true,
+    })
+  },
+
+  removeTrackFromCutscene: (cutsceneId, trackId) => {
+    const state = get()
+    const cutscene = state.cutscenes.find((c) => c.id === cutsceneId)
+    const track = cutscene?.tracks.find((t) => t.id === trackId)
+    const wasEditingThisTrack = !!track?.keyframes.some((k) => k.id === state.editingCutsceneKeyframeId)
+    set({
+      cutscenes: state.cutscenes.map((c) =>
+        c.id === cutsceneId ? { ...c, tracks: c.tracks.filter((t) => t.id !== trackId) } : c,
+      ),
+      editingCutsceneKeyframeId: wasEditingThisTrack ? null : state.editingCutsceneKeyframeId,
+      isDirty: true,
+    })
+  },
+
+  addCutsceneKeyframe: (cutsceneId, trackId) => {
+    const state = get()
+    const cutscene = state.cutscenes.find((c) => c.id === cutsceneId)
+    const track = cutscene?.tracks.find((t) => t.id === trackId)
+    const object = state.objects.find((o) => o.id === track?.objectId)
+    if (!cutscene || !track || !object) return
+    const lastTime = track.keyframes.reduce((max, k) => Math.max(max, k.time), 0)
+    const keyframe: AnimationKeyframe = {
+      id: genId('kf'),
+      time: lastTime + 500,
+      position: object.position,
+      rotation: object.rotation,
+      scale: object.scale,
+    }
+    const keyframes = [...track.keyframes, keyframe].sort((a, b) => a.time - b.time)
+    set({
+      cutscenes: state.cutscenes.map((c) =>
+        c.id === cutsceneId
+          ? { ...c, tracks: c.tracks.map((t) => (t.id === trackId ? { ...t, keyframes } : t)) }
+          : c,
+      ),
+      isDirty: true,
+    })
+    get().selectCutsceneKeyframeForEditing(cutsceneId, keyframe.id)
+  },
+
+  removeCutsceneKeyframe: (cutsceneId, trackId, keyframeId) => {
+    const state = get()
+    const cutscene = state.cutscenes.find((c) => c.id === cutsceneId)
+    const track = cutscene?.tracks.find((t) => t.id === trackId)
+    // A track needs at least a start and end pose.
+    if (!cutscene || !track || track.keyframes.length <= 2) return
+    const keyframes = track.keyframes.filter((k) => k.id !== keyframeId)
+    set({
+      cutscenes: state.cutscenes.map((c) =>
+        c.id === cutsceneId
+          ? { ...c, tracks: c.tracks.map((t) => (t.id === trackId ? { ...t, keyframes } : t)) }
+          : c,
+      ),
+      editingCutsceneKeyframeId:
+        state.editingCutsceneKeyframeId === keyframeId ? null : state.editingCutsceneKeyframeId,
+      isDirty: true,
+    })
+  },
+
+  updateCutsceneKeyframe: (cutsceneId, trackId, keyframeId, patch) =>
+    set((state) => ({
+      cutscenes: state.cutscenes.map((c) =>
+        c.id === cutsceneId
+          ? {
+              ...c,
+              tracks: c.tracks.map((t) =>
+                t.id === trackId
+                  ? {
+                      ...t,
+                      keyframes: t.keyframes.map((k) =>
+                        k.id === keyframeId ? { ...k, ...patch } : k,
+                      ),
+                    }
+                  : t,
+              ),
+            }
+          : c,
+      ),
+      isDirty: true,
+    })),
+
+  selectCutsceneKeyframeForEditing: (cutsceneId, keyframeId) => {
+    if (!keyframeId) {
+      set({ editingCutsceneId: cutsceneId, editingCutsceneKeyframeId: null })
+      return
+    }
+    const state = get()
+    const cutscene = state.cutscenes.find((c) => c.id === cutsceneId)
+    const track = cutscene?.tracks.find((t) => t.keyframes.some((k) => k.id === keyframeId))
+    const keyframe = track?.keyframes.find((k) => k.id === keyframeId)
+    const object = state.objects.find((o) => o.id === track?.objectId)
+    if (!cutscene || !track || !keyframe || !object) return
+    // Same non-undoable snap-to-pose as selectKeyframeForEditing, scoped to
+    // whichever object owns this track — still marks isDirty though (same
+    // note as that function: this changes real saved content).
+    set({
+      editingCutsceneId: cutsceneId,
+      editingCutsceneKeyframeId: keyframeId,
+      isDirty: true,
+      objects: state.objects.map((o) =>
+        o.id === object.id
+          ? { ...o, position: keyframe.position, rotation: keyframe.rotation, scale: keyframe.scale }
+          : o,
+      ),
+    })
+  },
+
+  toggleCutsceneTest: (cutsceneId) =>
+    set((state) => {
+      const stopping = state.testingCutsceneId === cutsceneId
+      return {
+        testingCutsceneId: stopping ? null : cutsceneId,
+        cutscenePlaying: !stopping,
+        cutsceneScrubTime: 0,
+      }
+    }),
+
+  toggleCutscenePlaying: () => set((state) => ({ cutscenePlaying: !state.cutscenePlaying })),
+
+  setCutsceneScrubTime: (ms) => set({ cutsceneScrubTime: Math.max(0, ms) }),
+
+  closeCutsceneStudio: () =>
+    set({
+      editingCutsceneId: null,
+      editingCutsceneKeyframeId: null,
+      testingCutsceneId: null,
+      cutscenePlaying: false,
+    }),
+
+  moveCutsceneToFolder: (cutsceneId, folderId) =>
+    set((state) => ({
+      cutscenes: state.cutscenes.map((c) => (c.id === cutsceneId ? { ...c, folderId } : c)),
+      isDirty: true,
+    })),
+
   select: (id) => set({ selectedIds: id ? [id] : [] }),
   // Shift/Ctrl/Cmd-click add-or-remove, used by both the viewport (see
   // usePointerClick callers) and the Hierarchy rows — same modifier
@@ -849,8 +1347,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }),
 
   saveScene: () => {
-    const { currentSceneId, objects, groups, sceneSettings } = get()
-    saveSceneData(currentSceneId, { objects, groups, settings: sceneSettings })
+    const { currentSceneId, objects, groups, sceneSettings, animations, cutscenes } = get()
+    saveSceneData(currentSceneId, { objects, groups, settings: sceneSettings, animations, cutscenes })
     set({ isDirty: false })
   },
 
@@ -859,7 +1357,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const meta: SceneMeta = { id: genId('scene'), name: `Cena ${state.scenesIndex.length + 1}` }
     const scenesIndex = [...state.scenesIndex, meta]
     saveScenesIndex(scenesIndex)
-    saveSceneData(meta.id, { objects: [], groups: [], settings: DEFAULT_SCENE_SETTINGS })
+    saveSceneData(meta.id, {
+      objects: [],
+      groups: [],
+      settings: DEFAULT_SCENE_SETTINGS,
+      animations: [],
+      cutscenes: [],
+    })
     localStorage.setItem(CURRENT_KEY, meta.id)
     set({
       scenesIndex,
@@ -867,10 +1371,20 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       objects: [],
       groups: [],
       sceneSettings: DEFAULT_SCENE_SETTINGS,
+      animations: [],
+      cutscenes: [],
       selectedIds: [],
       isDirty: false,
       undoStack: [],
       redoStack: [],
+      editingAnimationClipId: null,
+      editingKeyframeId: null,
+      testingAnimationId: null,
+      animationPlaying: false,
+      editingCutsceneId: null,
+      editingCutsceneKeyframeId: null,
+      testingCutsceneId: null,
+      cutscenePlaying: false,
     })
   },
 
@@ -884,10 +1398,20 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       objects: data.objects,
       groups: data.groups,
       sceneSettings: data.settings,
+      animations: data.animations,
+      cutscenes: data.cutscenes,
       selectedIds: [],
       isDirty: false,
       undoStack: [],
       redoStack: [],
+      editingAnimationClipId: null,
+      editingKeyframeId: null,
+      testingAnimationId: null,
+      animationPlaying: false,
+      editingCutsceneId: null,
+      editingCutsceneKeyframeId: null,
+      testingCutsceneId: null,
+      cutscenePlaying: false,
     })
   },
 
