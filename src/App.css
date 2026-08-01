@@ -393,7 +393,14 @@
 .asset-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  align-content: start;
   gap: 8px;
+  /* Fills the rest of .asset-browser-content's height even with few/no
+     tiles — otherwise a CSS grid only sizes to its own rows, leaving the
+     visually "empty" area below the last row outside this element, where
+     the onContextMenu handler (right-click → Nova pasta/Importar) isn't
+     attached and does nothing. */
+  min-height: 100%;
 }
 
 .asset-tile {
@@ -427,6 +434,11 @@ button.asset-tile.active {
 .asset-tile-icon {
   display: flex;
   color: #8a8f98;
+}
+
+.asset-tile-folder-icon {
+  display: block;
+  object-fit: contain;
 }
 
 .asset-tile-label {
@@ -1414,6 +1426,125 @@ button.asset-tile:disabled {
 
 .asset-file-input {
   display: none;
+}
+
+/* Right-click context menu (AssetContextMenu.tsx) — same look as
+   .dropdown-menu but position: fixed at the cursor instead of anchored
+   under a trigger button, and above every other floating panel. */
+.context-menu {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: #23262d;
+  border: 1px solid #33373f;
+  border-radius: 6px;
+  padding: 4px;
+  min-width: 160px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  z-index: 300;
+}
+
+.context-menu button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  text-align: left;
+  padding: 6px 8px;
+  border-radius: 4px;
+  color: #c9cdd4;
+  font-size: 12px;
+}
+
+.context-menu button svg {
+  flex-shrink: 0;
+  color: #8a8f98;
+}
+
+.context-menu button:hover {
+  background: #2c3038;
+}
+
+/* "Excluir" item in ItemContextMenu.tsx (right-click on an existing
+   asset/folder tile) — red like every other destructive action in the app
+   (.asset-tile-remove, .modal-actions button.danger). */
+.context-menu-danger {
+  color: #e2726a;
+}
+
+.context-menu-danger svg {
+  color: inherit;
+}
+
+.context-menu-danger:hover {
+  background: #c0392b;
+  color: #fff;
+}
+
+/* Folder tile (AssetBrowser.tsx's FolderTile) — reuses .asset-tile-custom's
+   overflow/padding reset (for the .asset-tile-remove badge) and adds the
+   drag-and-drop-target highlight. */
+.asset-tile-folder.drag-over {
+  border-color: #3a6df0;
+  background: #26304a;
+}
+
+.asset-tile-folder-editing {
+  cursor: default;
+}
+
+.asset-tile-rename-input {
+  width: calc(100% - 12px);
+  margin-top: 2px;
+  background: #14161a;
+  border: 1px solid #3a6df0;
+  border-radius: 4px;
+  color: #e4e6eb;
+  font: inherit;
+  font-size: 11px;
+  text-align: center;
+  padding: 2px 4px;
+}
+
+/* "Voltar" row shown instead of the tab header once a folder is open
+   (AssetBrowser.tsx's FolderBreadcrumb) — also a drop target for dragging
+   an item back out to the tab's root. */
+.asset-folder-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 0 10px;
+  border-radius: 6px;
+}
+
+.asset-folder-breadcrumb.drag-over {
+  outline: 1px dashed #3a6df0;
+  background: #1a2333;
+}
+
+.asset-folder-breadcrumb button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #23262d;
+  border: 1px solid #33373f;
+  border-radius: 6px;
+  color: #c9cdd4;
+  font-size: 12px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.asset-folder-breadcrumb button:hover {
+  background: #2c3038;
+}
+
+.asset-folder-breadcrumb-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #8a8f98;
 }
 
 /* Full-screen "object studio" (ImportStudio.tsx) — a separate mode that

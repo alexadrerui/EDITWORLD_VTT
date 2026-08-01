@@ -52,18 +52,23 @@ async function withStore<T>(
   })
 }
 
-export async function saveAsset(file: File, kind: AssetKind): Promise<AssetMeta> {
+export async function saveAsset(
+  file: File,
+  kind: AssetKind,
+  folderId?: string | null,
+): Promise<AssetMeta> {
   const record: AssetRecord = {
     id: genAssetId(),
     name: file.name,
     kind,
     mimeType: file.type,
+    folderId: folderId ?? null,
     blob: file,
     createdAt: Date.now(),
   }
   await withStore('readwrite', (store) => store.put(record))
   const { id, name, mimeType } = record
-  return { id, name, kind, mimeType }
+  return { id, name, kind, mimeType, folderId: record.folderId }
 }
 
 export async function getAssetBlob(id: string): Promise<Blob | undefined> {
@@ -75,9 +80,18 @@ export async function listAssets(): Promise<AssetMeta[]> {
   const records = await withStore<AssetRecord[]>('readonly', (store) => store.getAll())
   return records
     .sort((a, b) => a.createdAt - b.createdAt)
-    .map(({ id, name, kind, mimeType }) => ({ id, name, kind, mimeType }))
+    .map(({ id, name, kind, mimeType, folderId }) => ({ id, name, kind, mimeType, folderId }))
 }
 
 export async function deleteAsset(id: string): Promise<void> {
   await withStore('readwrite', (store) => store.delete(id))
+}
+
+// Reassigns which folder an asset belongs to (or moves it back to the tab's
+// root with null) — read-modify-write since IDBObjectStore has no partial
+// update, same pattern as every other mutation here.
+export async function moveAsset(id: string, folderId: string | null): Promise<void> {
+  const record = await withStore<AssetRecord | undefined>('readonly', (store) => store.get(id))
+  if (!record) return
+  await withStore('readwrite', (store) => store.put({ ...record, folderId }))
 }

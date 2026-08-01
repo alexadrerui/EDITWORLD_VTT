@@ -173,7 +173,18 @@ function StudioViewport({
 // rather than living in global store state. Everything here is local/draft
 // until "Salvar" (addCustomAsset, useEditorStore.ts) — closing without
 // saving discards the draft entirely, same as ConfirmDialog's onCancel.
-export function ImportStudio({ file, onClose }: { file: File; onClose: () => void }) {
+export function ImportStudio({
+  file,
+  onClose,
+  folderId,
+}: {
+  file: File
+  onClose: () => void
+  // Which AssetBrowser "Objetos" tab folder (see AssetFolder in types.ts)
+  // the resulting CustomAsset should land in — null/undefined for the tab's
+  // root, same convention as everywhere else folderId is threaded through.
+  folderId?: string | null
+}) {
   const addCustomAsset = useEditorStore((s) => s.addCustomAsset)
   const [name, setName] = useState(() => file.name.replace(/\.[^./\\]+$/, ''))
   const [parts, setParts] = useState<CustomAssetPart[] | null>(null)
@@ -234,7 +245,7 @@ export function ImportStudio({ file, onClose }: { file: File; onClose: () => voi
 
   const handleSave = () => {
     if (!parts || parts.length === 0) return
-    addCustomAsset({ name: name.trim() || 'Objeto importado', parts })
+    addCustomAsset({ name: name.trim() || 'Objeto importado', parts }, folderId)
     onClose()
   }
 

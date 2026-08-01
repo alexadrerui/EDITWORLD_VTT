@@ -151,6 +151,28 @@ export interface AssetMeta {
   name: string
   kind: AssetKind
   mimeType: string
+  // null/undefined = sits at the tab's root, not inside a folder. See
+  // AssetFolder below — folders are one level deep (a folder never has a
+  // folderId of its own), so this is the whole story for where an asset
+  // lives.
+  folderId?: string | null
+}
+
+// AssetBrowser tabs that support the flat (one-level) folder organization
+// described on AssetFolder — deliberately excludes 'scenes' (has its own
+// list, not asset-shaped) and 'store' (mock/read-only catalog, nothing to
+// organize).
+export type AssetFolderTab = 'objects' | 'models' | 'textures' | 'video' | 'audio'
+
+// A user-created grouping folder within one AssetBrowser tab — purely
+// organizational (like SceneGroup for scene objects), one level deep only:
+// a folder holds assets/CustomAssets directly, never another folder. Kept
+// in useEditorStore's `folders` state, persisted the same way as
+// customAssets (see loadFolders/saveFolders).
+export interface AssetFolder {
+  id: string
+  name: string
+  tab: AssetFolderTab
 }
 
 // Visual/organizational grouping only for now — no real 3D parenting yet
@@ -276,4 +298,8 @@ export interface CustomAsset {
   name: string
   parts: CustomAssetPart[]
   createdAt: number
+  // Same "root when unset" convention as AssetMeta.folderId — the Objetos
+  // tab's folders live in useEditorStore's `folders` state (tab: 'objects'),
+  // same flat structure as every other asset-backed tab.
+  folderId?: string | null
 }

@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import type {
   AssetBrowserTab,
+  AssetFolder,
+  AssetFolderTab,
   AssetKind,
   AssetMeta,
   AxisView,
@@ -25,7 +27,12 @@ import {
   SOUND_DEFAULTS,
   isLightKind,
 } from '../scene/primitives'
-import { listAssets, saveAsset } from './assetStore'
+import {
+  deleteAsset as deleteAssetRecord,
+  listAssets,
+  moveAsset as moveAssetRecord,
+  saveAsset,
+} from './assetStore'
 
 const DEFAULT_SCENE_SETTINGS: SceneSettings = {
   backgroundColor: '#14161a',
@@ -90,6 +97,26 @@ function loadCustomAssets(): CustomAsset[] {
 
 function saveCustomAssets(assets: CustomAsset[]) {
   localStorage.setItem(CUSTOM_ASSETS_KEY, JSON.stringify(assets))
+}
+
+// Asset-browser folders (Objetos/Modelos/Texturas/Vídeo/Áudio tabs) — same
+// "global library, persist immediately" reasoning as customAssets above.
+// The folders themselves are just {id, name, tab}; which assets/customAssets
+// sit inside one is tracked on the asset's own folderId field instead of a
+// members list here, same shape as SceneGroup/SceneObject.groupId.
+const ASSET_FOLDERS_KEY = 'editworld-vtt:asset-folders'
+
+function loadAssetFolders(): AssetFolder[] {
+  try {
+    const raw = localStorage.getItem(ASSET_FOLDERS_KEY)
+    return raw ? (JSON.parse(raw) as AssetFolder[]) : []
+  } catch {
+    return []
+  }
+}
+
+function saveAssetFolders(folders: AssetFolder[]) {
+  localStorage.setItem(ASSET_FOLDERS_KEY, JSON.stringify(folders))
 }
 
 interface SceneData {
@@ -259,6 +286,7 @@ const initialSceneId = (() => {
 })()
 const initialSceneData = loadSceneData(initialSceneId)
 const initialCustomAssets = loadCustomAssets()
+const initialAssetFolders = loadAssetFolders()
 
 interface EditorState {
   scenesIndex: SceneMeta[]
@@ -304,9 +332,30 @@ interface EditorState {
   undoStack: HistoryEntry[]
   redoStack: HistoryEntry[]
   customAssets: CustomAsset[]
-  addCustomAsset: (asset: { name: string; parts: CustomAssetPart[] }) => void
+  addCustomAsset: (asset: { name: string; parts: CustomAssetPart[] }, folderId?: string | null) => void
   removeCustomAsset: (id: string) => void
   instantiateCustomAsset: (id: string) => void
+  // One flat level of folders per AssetBrowser tab (see AssetFolder) — shared
+  // by both AssetMeta-backed tabs (Modelos/Texturas/Vídeo/Áudio) and the
+  // CustomAsset-backed Objetos tab, distinguished by AssetFolder.tab.
+  folders: AssetFolder[]
+  createFolder: (tab: AssetFolderTab) => AssetFolder
+  renameFolder: (id: string, name: string) => void
+  // Deleting a folder only ungroups it — contained assets/customAssets move
+  // back to the tab's root (folderId: null) rather than being deleted
+  // themselves, same "folder is organizational only" stance as SceneGroup.
+  deleteFolder: (id: string) => void
+  moveAssetToFolder: (assetId: string, folderId: string | null) => Promise<void>
+  moveCustomAssetToFolder: (id: string, folderId: string | null) => void
+  // Deletes the binary asset itself (IndexedDB blob + this metadata entry —
+  // see assetStore.ts's deleteAsset), unlike deleteFolder which only
+  // ungroups. Any SceneObject/sceneSettings field still referencing this id
+  // (assetId/colorMapAssetId/videoMapAssetId/backgroundMusicAssetId) isn't
+  // cleared here — the loaders (assetLoaders.ts) already render a "missing
+  // asset" placeholder / silently drop the texture for an unresolvable id,
+  // same as if the IndexedDB record were lost some other way (cleared
+  // browser data, etc.), so there's nothing extra to reconcile.
+  removeAsset: (id: string) => Promise<void>
   addObject: (kind: PrimitiveKind, overrides?: Partial<SceneObject>) => void
   removeObject: (id: string) => void
   removeObjects: (ids: string[]) => void
@@ -330,10 +379,10 @@ interface EditorState {
   // scene switches, importing a file isn't a content edit to undo/redo, it's
   // adding to the asset library itself (removing the resulting SceneObject/
   // reference, if any, is what undo covers).
-  importModel: (file: File) => Promise<AssetMeta>
-  importTexture: (file: File) => Promise<AssetMeta>
-  importAudio: (file: File) => Promise<AssetMeta>
-  importVideo: (file: File) => Promise<AssetMeta>
+  importModel: (file: File, folderId?: string | null) => Promise<AssetMeta>
+  importTexture: (file: File, folderId?: string | null) => Promise<AssetMeta>
+  importAudio: (file: File, folderId?: string | null) => Promise<AssetMeta>
+  importVideo: (file: File, folderId?: string | null) => Promise<AssetMeta>
   toggleSoundTest: (id: string) => void
   toggleBackgroundMusicTest: () => void
   select: (id: string | null) => void
@@ -366,10 +415,19 @@ async function importAndRegister(
   set: (partial: Partial<EditorState> | ((state: EditorState) => Partial<EditorState>)) => void,
   file: File,
   kind: AssetKind,
+  folderId?: string | null,
 ): Promise<AssetMeta> {
-  const meta = await saveAsset(file, kind)
+  const meta = await saveAsset(file, kind, folderId)
   set((state) => ({ assets: [...state.assets, meta] }))
   return meta
+}
+
+// Folder name shown at creation time, made unique per tab (Pasta 1, Pasta 2,
+// ...) the same way createPrimitive numbers new lights/meshes — renamed
+// inline afterwards via the same double-click pattern as scenes (Hierarchy.tsx).
+function nextFolderName(existing: AssetFolder[], tab: AssetFolderTab): string {
+  const n = existing.filter((f) => f.tab === tab).length + 1
+  return `Pasta ${n}`
 }
 
 export const useEditorStore = create<EditorState>((set, get) => ({
@@ -405,8 +463,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   redoStack: [],
   customAssets: initialCustomAssets,
 
-  addCustomAsset: (asset) => {
-    const customAsset: CustomAsset = { id: genId('asset'), createdAt: Date.now(), ...asset }
+  addCustomAsset: (asset, folderId) => {
+    const customAsset: CustomAsset = {
+      id: genId('asset'),
+      createdAt: Date.now(),
+      folderId: folderId ?? null,
+      ...asset,
+    }
     const customAssets = [...get().customAssets, customAsset]
     saveCustomAssets(customAssets)
     set({ customAssets })
@@ -416,6 +479,58 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const customAssets = get().customAssets.filter((a) => a.id !== id)
     saveCustomAssets(customAssets)
     set({ customAssets })
+  },
+
+  folders: initialAssetFolders,
+
+  createFolder: (tab) => {
+    const folder: AssetFolder = { id: genId('folder'), name: nextFolderName(get().folders, tab), tab }
+    const folders = [...get().folders, folder]
+    saveAssetFolders(folders)
+    set({ folders })
+    return folder
+  },
+
+  renameFolder: (id, name) => {
+    const folders = get().folders.map((f) => (f.id === id ? { ...f, name } : f))
+    saveAssetFolders(folders)
+    set({ folders })
+  },
+
+  deleteFolder: (id) => {
+    const folders = get().folders.filter((f) => f.id !== id)
+    saveAssetFolders(folders)
+    const customAssets = get().customAssets.map((a) =>
+      a.folderId === id ? { ...a, folderId: null } : a,
+    )
+    saveCustomAssets(customAssets)
+    const movedAssetIds = get()
+      .assets.filter((a) => a.folderId === id)
+      .map((a) => a.id)
+    const assets = get().assets.map((a) => (a.folderId === id ? { ...a, folderId: null } : a))
+    set({ folders, customAssets, assets })
+    // Fire-and-forget IndexedDB updates to match — the in-memory `assets`
+    // state above is what the UI reads, this just keeps the persisted
+    // records from disagreeing with it after a reload.
+    for (const assetId of movedAssetIds) void moveAssetRecord(assetId, null)
+  },
+
+  moveAssetToFolder: async (assetId, folderId) => {
+    await moveAssetRecord(assetId, folderId)
+    set((state) => ({
+      assets: state.assets.map((a) => (a.id === assetId ? { ...a, folderId } : a)),
+    }))
+  },
+
+  moveCustomAssetToFolder: (id, folderId) => {
+    const customAssets = get().customAssets.map((a) => (a.id === id ? { ...a, folderId } : a))
+    saveCustomAssets(customAssets)
+    set({ customAssets })
+  },
+
+  removeAsset: async (id) => {
+    await deleteAssetRecord(id)
+    set((state) => ({ assets: state.assets.filter((a) => a.id !== id) }))
   },
 
   // Expands a stored template into real SceneObjects (one box per part,
@@ -634,10 +749,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       isDirty: true,
     })),
 
-  importModel: (file) => importAndRegister(set, file, 'model'),
-  importTexture: (file) => importAndRegister(set, file, 'texture'),
-  importAudio: (file) => importAndRegister(set, file, 'audio'),
-  importVideo: (file) => importAndRegister(set, file, 'video'),
+  importModel: (file, folderId) => importAndRegister(set, file, 'model', folderId),
+  importTexture: (file, folderId) => importAndRegister(set, file, 'texture', folderId),
+  importAudio: (file, folderId) => importAndRegister(set, file, 'audio', folderId),
+  importVideo: (file, folderId) => importAndRegister(set, file, 'video', folderId),
 
   toggleSoundTest: (id) =>
     set((state) => ({ testingSoundId: state.testingSoundId === id ? null : id })),
