@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, type RefObject } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei/core/OrbitControls'
 import {
+  Audio,
   Color,
   type DirectionalLight,
   NeutralToneMapping,
@@ -22,6 +23,8 @@ import {
   PRIMITIVE_BASE_SIZE,
 } from './primitives'
 import { SceneObjects } from './SceneObjects'
+import { useAudioBuffer } from './assetLoaders'
+import { globalAudioListener } from './audioListener'
 import { useEditorStore } from '../state/useEditorStore'
 import type { AxisView } from '../types'
 
@@ -268,6 +271,16 @@ function CameraRig({ orbitControlsRef }: { orbitControlsRef: RefObject<any> }) {
   const setDefaultCamera = useThree((s) => s.set)
   const size = useThree((s) => s.size)
 
+  // Re-parents the single shared AudioListener (see audioListener.ts) onto
+  // whichever camera is currently active — three.js's Object3D.add()
+  // automatically detaches an object from its previous parent, so this one
+  // effect (keyed on `camera`, same as the pendingTargetRef restore below)
+  // is all that's needed to keep it following the perspective<->orthographic
+  // swap; no manual `.remove()` call required.
+  useEffect(() => {
+    camera.add(globalAudioListener)
+  }, [camera])
+
   // The perspective camera is the one `<Canvas camera={{...}}>` already
   // created — captured once here (projection starts as 'perspective') rather
   // than constructing a second instance, so there's no pop on load.
@@ -399,6 +412,40 @@ function CameraRig({ orbitControlsRef }: { orbitControlsRef: RefObject<any> }) {
   return null
 }
 
+// Non-positional background music, mirroring soundSource's SoundIcon "▶
+// Testar" bridge (testingBackgroundMusic here instead of testingSoundId) —
+// never autoplays on scene load, only plays while the SceneInspector's "▶
+// Testar" button is toggled on. Plays through the same shared AudioListener
+// as every positional soundSource (see audioListener.ts).
+function BackgroundMusic() {
+  const sceneSettings = useEditorStore((s) => s.sceneSettings)
+  const testing = useEditorStore((s) => s.testingBackgroundMusic)
+  const buffer = useAudioBuffer(sceneSettings.backgroundMusicAssetId)
+  const audio = useMemo(() => new Audio(globalAudioListener), [])
+
+  useEffect(() => {
+    if (!buffer) return
+    audio.setBuffer(buffer)
+    audio.setLoop(sceneSettings.backgroundMusicLoop)
+    audio.setVolume(sceneSettings.backgroundMusicVolume)
+  }, [audio, buffer, sceneSettings.backgroundMusicLoop, sceneSettings.backgroundMusicVolume])
+
+  useEffect(() => {
+    if (!buffer) return
+    if (testing && !audio.isPlaying) audio.play()
+    else if (!testing && audio.isPlaying) audio.stop()
+  }, [audio, testing, buffer])
+
+  useEffect(
+    () => () => {
+      if (audio.isPlaying) audio.stop()
+    },
+    [audio],
+  )
+
+  return <primitive object={audio} />
+}
+
 export function Editor3D() {
   const orbitControlsRef = useRef(null)
   const sunRef = useRef<DirectionalLight | null>(null)
@@ -473,6 +520,7 @@ export function Editor3D() {
       <CameraRig orbitControlsRef={orbitControlsRef} />
       <BloomPipeline />
       <SunCSM sunRef={sunRef} enabled={csmActive} mapSize={shadowMapSize} />
+      <BackgroundMusic />
       <ambientLight intensity={sceneSettings.ambientIntensity} />
       <directionalLight
         ref={sunRef}

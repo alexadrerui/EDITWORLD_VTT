@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import type {
   AssetBrowserTab,
+  AssetKind,
+  AssetMeta,
   AxisView,
   CustomAsset,
   CustomAssetPart,
@@ -17,7 +19,13 @@ import type {
   SceneSettings,
   TransformMode,
 } from '../types'
-import { DIRECTIONAL_LIGHT_INTENSITY, LIGHT_DEFAULTS, isLightKind } from '../scene/primitives'
+import {
+  DIRECTIONAL_LIGHT_INTENSITY,
+  LIGHT_DEFAULTS,
+  SOUND_DEFAULTS,
+  isLightKind,
+} from '../scene/primitives'
+import { listAssets, saveAsset } from './assetStore'
 
 const DEFAULT_SCENE_SETTINGS: SceneSettings = {
   backgroundColor: '#14161a',
@@ -30,6 +38,10 @@ const DEFAULT_SCENE_SETTINGS: SceneSettings = {
   // existing saved scenes keep the same shadow direction after migration.
   sunElevation: 53.3,
   sunAzimuth: 63.4,
+  backgroundMusicAssetId: null,
+  backgroundMusicVolume: 1,
+  backgroundMusicLoop: true,
+  backgroundMusicAutoplayIntent: false,
 }
 
 const INDEX_KEY = 'editworld-vtt:scenes'
@@ -116,7 +128,10 @@ function loadSceneData(id: string): SceneData {
           dirtAmount: 0,
           wearAmount: 0,
           weatheringColor: '#2b2118',
+          colorMapAssetId: null,
+          videoMapAssetId: null,
           ...LIGHT_DEFAULTS,
+          ...SOUND_DEFAULTS,
           ...o,
         }) as SceneObject,
     )
@@ -191,16 +206,18 @@ const LIGHT_NAME: Record<LightKind, string> = {
   directionalLight: 'Luz direcional',
 }
 
-function createPrimitive(kind: PrimitiveKind): SceneObject {
+function createPrimitive(kind: PrimitiveKind, overrides?: Partial<SceneObject>): SceneObject {
   const n = nextObjectId++
   const light = isLightKind(kind)
+  const isSound = kind === 'soundSource'
   return {
     id: genId('obj'),
     name: light ? `${LIGHT_NAME[kind]} ${n}` : `${kind[0].toUpperCase()}${kind.slice(1)} ${n}`,
     kind,
-    // Lights spawn floating at head height like a hanging lamp; meshes sit
-    // on the ground (planes flush at y=0, everything else resting at 0.5).
-    position: [0, light ? 3 : kind === 'plane' ? 0 : 0.5, 0],
+    // Lights and sound sources spawn floating at head height like a hanging
+    // lamp; meshes (including imported models) sit on the ground (planes
+    // flush at y=0, everything else resting at 0.5).
+    position: [0, light || isSound ? 3 : kind === 'plane' ? 0 : 0.5, 0],
     rotation: [0, 0, 0],
     scale: [1, 1, 1],
     color: light ? '#fff2cc' : '#8a8f98',
@@ -221,10 +238,14 @@ function createPrimitive(kind: PrimitiveKind): SceneObject {
     dirtAmount: 0,
     wearAmount: 0,
     weatheringColor: '#2b2118',
+    colorMapAssetId: null,
+    videoMapAssetId: null,
     ...LIGHT_DEFAULTS,
+    ...SOUND_DEFAULTS,
     // Directional lights have no distance falloff, so the shared light
     // intensity default (tuned for point/spot) would be blindingly bright.
     lightIntensity: kind === 'directionalLight' ? DIRECTIONAL_LIGHT_INTENSITY : LIGHT_DEFAULTS.lightIntensity,
+    ...overrides,
   }
 }
 
@@ -246,6 +267,21 @@ interface EditorState {
   groups: SceneGroup[]
   sceneSettings: SceneSettings
   selectedIds: string[]
+  // Metadata only (no blob) — hydrated asynchronously from IndexedDB right
+  // after this store is created (see the listAssets().then(...) call below
+  // the store definition), so it's [] for one tick on load. Blobs are
+  // fetched on demand via assetStore.ts's getAssetBlob, keyed by
+  // SceneObject.assetId/colorMapAssetId/videoMapAssetId/
+  // sceneSettings.backgroundMusicAssetId.
+  assets: AssetMeta[]
+  // "▶ Testar" preview state for sound objects/background music (Inspector.tsx/
+  // SceneInspector.tsx) — ephemeral UI state, not persisted or undoable, same
+  // category as selectedIds/focusTargetId above. The actual THREE.Audio/
+  // PositionalAudio playback lives inside the Canvas tree (SceneObjectMesh.tsx's
+  // SoundIcon, Editor3D.tsx's BackgroundMusic); these fields are just the
+  // store-bridge that lets the Inspector (outside the Canvas) start/stop it.
+  testingSoundId: string | null
+  testingBackgroundMusic: boolean
   transformMode: TransformMode
   isDirty: boolean
   positionSnap: PositionSnapMode
@@ -271,7 +307,7 @@ interface EditorState {
   addCustomAsset: (asset: { name: string; parts: CustomAssetPart[] }) => void
   removeCustomAsset: (id: string) => void
   instantiateCustomAsset: (id: string) => void
-  addObject: (kind: PrimitiveKind) => void
+  addObject: (kind: PrimitiveKind, overrides?: Partial<SceneObject>) => void
   removeObject: (id: string) => void
   removeObjects: (ids: string[]) => void
   updateObject: (id: string, patch: Partial<SceneObject>) => void
@@ -287,6 +323,19 @@ interface EditorState {
   toggleGroupLocked: (id: string) => void
   toggleGroupHidden: (id: string) => void
   updateSceneSettings: (patch: Partial<SceneSettings>) => void
+  // Persist a file to IndexedDB (see assetStore.ts) and register it in
+  // `assets`; each resolves with the new AssetMeta so the caller (AssetBrowser/
+  // Inspector, added in later phases) can then addObject/updateObject/
+  // updateSceneSettings with the returned id as needed. Not undoable — like
+  // scene switches, importing a file isn't a content edit to undo/redo, it's
+  // adding to the asset library itself (removing the resulting SceneObject/
+  // reference, if any, is what undo covers).
+  importModel: (file: File) => Promise<AssetMeta>
+  importTexture: (file: File) => Promise<AssetMeta>
+  importAudio: (file: File) => Promise<AssetMeta>
+  importVideo: (file: File) => Promise<AssetMeta>
+  toggleSoundTest: (id: string) => void
+  toggleBackgroundMusicTest: () => void
   select: (id: string | null) => void
   toggleSelect: (id: string) => void
   setTransformMode: (mode: TransformMode) => void
@@ -313,6 +362,16 @@ interface EditorState {
   renameScene: (id: string, name: string) => void
 }
 
+async function importAndRegister(
+  set: (partial: Partial<EditorState> | ((state: EditorState) => Partial<EditorState>)) => void,
+  file: File,
+  kind: AssetKind,
+): Promise<AssetMeta> {
+  const meta = await saveAsset(file, kind)
+  set((state) => ({ assets: [...state.assets, meta] }))
+  return meta
+}
+
 export const useEditorStore = create<EditorState>((set, get) => ({
   scenesIndex: initialScenesIndex,
   currentSceneId: initialSceneId,
@@ -320,6 +379,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   groups: initialSceneData.groups,
   sceneSettings: initialSceneData.settings,
   selectedIds: [],
+  assets: [],
+  testingSoundId: null,
+  testingBackgroundMusic: false,
   transformMode: 'translate',
   isDirty: false,
   positionSnap: null,
@@ -388,9 +450,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       }
     }),
 
-  addObject: (kind) =>
+  addObject: (kind, overrides) =>
     set((state) => {
-      const obj = createPrimitive(kind)
+      const obj = createPrimitive(kind, overrides)
       const index = state.objects.length
       return {
         objects: [...state.objects, obj],
@@ -572,6 +634,16 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       isDirty: true,
     })),
 
+  importModel: (file) => importAndRegister(set, file, 'model'),
+  importTexture: (file) => importAndRegister(set, file, 'texture'),
+  importAudio: (file) => importAndRegister(set, file, 'audio'),
+  importVideo: (file) => importAndRegister(set, file, 'video'),
+
+  toggleSoundTest: (id) =>
+    set((state) => ({ testingSoundId: state.testingSoundId === id ? null : id })),
+  toggleBackgroundMusicTest: () =>
+    set((state) => ({ testingBackgroundMusic: !state.testingBackgroundMusic })),
+
   select: (id) => set({ selectedIds: id ? [id] : [] }),
   // Shift/Ctrl/Cmd-click add-or-remove, used by both the viewport (see
   // usePointerClick callers) and the Hierarchy rows — same modifier
@@ -712,3 +784,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set({ scenesIndex })
   },
 }))
+
+// First async code this store has — everything else above is synchronous
+// localStorage reads. Fires once, right after the store is created, so
+// `assets` starts as [] for one tick and then hydrates; UI reading `assets`
+// (AssetBrowser, Inspector texture pickers, etc.) is expected to just render
+// an empty library until this resolves, same as any other loading state.
+listAssets().then((assets) => useEditorStore.setState({ assets }))
