@@ -521,23 +521,128 @@ button.asset-tile.active {
   right: 280px;
 }
 
-.objects-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.objects-header h3 {
-  margin: 0;
-}
-
 .hierarchy {
   left: 12px;
 }
 
+/* Back arrow + campaign title row (Spline-style panel header) — see
+   CampaignHeader in Hierarchy.tsx. */
+.hierarchy-topbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.hierarchy-back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  color: #8a8f98;
+  cursor: pointer;
+}
+
+.hierarchy-back:hover {
+  background: #23262d;
+  color: #e4e6eb;
+}
+
+.hierarchy-campaign-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 600;
+  color: #e4e6eb;
+}
+
+.hierarchy-campaign-input {
+  flex: 1;
+  min-width: 0;
+  background: #23262d;
+  border: 1px solid #33373f;
+  border-radius: 4px;
+  padding: 3px 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #e4e6eb;
+}
+
+/* "Objetos" / "Ativos" panel switcher — see PanelTabs in Hierarchy.tsx.
+   "Ativos" is a placeholder tab for now. */
+.hierarchy-tabs {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid #2a2e35;
+}
+
+.hierarchy-tabs button {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #8a8f98;
+  cursor: pointer;
+}
+
+.hierarchy-tabs button:hover {
+  color: #e4e6eb;
+}
+
+.hierarchy-tabs button.active {
+  color: #e4e6eb;
+  border-bottom-color: #3a6df0;
+}
+
+/* Templates/Import/Help & Feedback footer row — see HierarchyFooter in
+   Hierarchy.tsx. All three are placeholders, not wired to anything yet. */
+.hierarchy-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid #2a2e35;
+}
+
+.hierarchy-footer button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  border-radius: 5px;
+  padding: 7px 6px;
+  font-size: 13px;
+  color: #8a8f98;
+  text-align: left;
+  cursor: pointer;
+}
+
+.hierarchy-footer button:hover {
+  background: #23262d;
+  color: #e4e6eb;
+}
+
 .selection-panel {
   right: 12px;
+  /* Wider than the shared .floating-panel default (260px) — the Posição/
+     Rotação/Escala/Pivô axis inputs (see .axis-field below) were clipping
+     values past ~3-4 digits at that width. Long values (e.g. a negative
+     number with 3 decimals) can still clip at 300px — accepted tradeoff,
+     not worth widening further for that edge case. */
+  width: 300px;
 }
 
 .selection-header {
@@ -958,8 +1063,6 @@ button.asset-tile.active {
   padding: 2px 0;
   font-size: 13px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   color: #8a8f98;
   cursor: pointer;
 }
@@ -968,6 +1071,7 @@ button.asset-tile.active {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
   width: 22px;
   height: 22px;
   background: none;
@@ -1061,15 +1165,23 @@ button.asset-tile.active {
   background: #2f5cd0;
 }
 
+.hierarchy-search-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
 .hierarchy-search {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex: 1;
+  min-width: 0;
   background: #14161a;
   border: 1px solid #2a2e35;
   border-radius: 5px;
   padding: 5px 8px;
-  margin-bottom: 8px;
   color: #5c6270;
 }
 
@@ -1209,7 +1321,7 @@ button.asset-tile.active {
 }
 
 .field-label {
-  width: 64px;
+  width: 56px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -1231,6 +1343,106 @@ button.asset-tile.active {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: #8a8f98;
+}
+
+/* "Transformar" section header + its Edit Pivot trigger (Inspector.tsx) —
+   same row/border as .field-section-label, just split so the icon button
+   can sit flush right instead of stacking below the label. */
+.field-section-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 4px 0 10px;
+  padding-top: 12px;
+  border-top: 1px solid #2a2e35;
+}
+
+.field-section-label-row .field-section-label {
+  margin: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.edit-pivot-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  color: #8a8f98;
+  cursor: pointer;
+}
+
+.edit-pivot-toggle:hover {
+  background: #23262d;
+  color: #e4e6eb;
+}
+
+.edit-pivot-toggle.active {
+  background: #2c3038;
+  color: #3a6df0;
+}
+
+/* Edit Pivot popover (Spline-style, opened from the Transformar section
+   header) — floats over the viewport just left of .selection-panel, no
+   backdrop, same visual language as .floating-panel. Editing the pivot here
+   compensates Position so the mesh doesn't visibly jump — see
+   handlePivotChange in Inspector.tsx. */
+.edit-pivot-panel {
+  position: absolute;
+  top: 12px;
+  /* Sits just left of .selection-panel (300px wide + 12px margin + 12px gap). */
+  right: 324px;
+  width: 240px;
+  background: rgba(26, 29, 34, 0.92);
+  backdrop-filter: blur(6px);
+  border: 1px solid #33373f;
+  border-radius: 8px;
+  padding: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  z-index: 2;
+}
+
+.edit-pivot-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.edit-pivot-panel-header h4 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #e4e6eb;
+}
+
+.edit-pivot-panel-header button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  color: #8a8f98;
+  cursor: pointer;
+}
+
+.edit-pivot-panel-header button:hover {
+  background: #23262d;
+  color: #e4e6eb;
+}
+
+.edit-pivot-hint {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #5c6270;
 }
 
 .axis-lock-toggle {
@@ -1498,7 +1710,7 @@ button.asset-tile:disabled {
   display: flex;
   flex: 1;
   min-width: 0;
-  gap: 3px;
+  gap: 2px;
 }
 
 .axis-field {
@@ -1506,11 +1718,11 @@ button.asset-tile:disabled {
   align-items: center;
   flex: 1;
   min-width: 0;
-  gap: 3px;
+  gap: 2px;
   background: #23262d;
   border: 1px solid #33373f;
   border-radius: 4px;
-  padding: 3px 4px;
+  padding: 3px 3px;
 }
 
 .axis-field-label {
@@ -1607,6 +1819,206 @@ button.asset-tile:disabled {
 
 .modal-actions button.danger:hover {
   background: #d64535;
+}
+
+/* Import launcher window (ImportModal.tsx) — Spline-style "Import or Drag &
+   Drop" tile grid, reusing .modal/.modal-overlay for the chrome and
+   .asset-grid/.asset-tile (AssetBrowser.tsx) for the tiles so it matches
+   the rest of the app's asset-tile look instead of inventing a new one. */
+.import-modal {
+  width: min(420px, calc(100vw - 40px));
+  max-width: none;
+}
+
+.import-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.import-modal-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #e4e6eb;
+}
+
+.modal-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  color: #8a8f98;
+  cursor: pointer;
+}
+
+.modal-close:hover {
+  background: #23262d;
+  color: #e4e6eb;
+}
+
+/* Asset Store window (AssetStoreModal.tsx) — Spline-style Templates window:
+   Objects/Scenes tabs + search in the header, a category sidebar, and a
+   scrollable content area (grouped-by-category when "All" is selected, a
+   single filtered grid otherwise). Reuses .asset-grid/.asset-tile-mock for
+   the item cards so they match the rest of the app instead of a new tile
+   style. Fixed height (vs. .import-modal's content-sized height) since the
+   category list + grouped sections can get much taller than the viewport. */
+.templates-modal {
+  width: min(680px, calc(100vw - 40px));
+  max-width: none;
+  height: min(520px, calc(100vh - 80px));
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.templates-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+  padding: 14px 16px;
+  border-bottom: 1px solid #2a2e35;
+}
+
+.templates-modal-header h3 {
+  margin: 0;
+  flex-shrink: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #e4e6eb;
+}
+
+.templates-modal-tabs {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.templates-modal-tabs button {
+  background: none;
+  border: none;
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12px;
+  color: #8a8f98;
+  cursor: pointer;
+}
+
+.templates-modal-tabs button:hover {
+  color: #e4e6eb;
+}
+
+.templates-modal-tabs button.active {
+  background: #2c3038;
+  color: #e4e6eb;
+}
+
+.templates-modal-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  background: #14161a;
+  border: 1px solid #2a2e35;
+  border-radius: 6px;
+  padding: 5px 10px;
+  color: #5c6270;
+}
+
+.templates-modal-search input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  color: #e4e6eb;
+  font-size: 13px;
+}
+
+.templates-modal-search input::placeholder {
+  color: #5c6270;
+}
+
+.templates-modal-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.templates-modal-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 130px;
+  flex-shrink: 0;
+  padding: 12px 8px;
+  border-right: 1px solid #2a2e35;
+  overflow-y: auto;
+}
+
+.templates-modal-sidebar button {
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding: 7px 8px;
+  font-size: 12px;
+  color: #8a8f98;
+  text-align: left;
+  cursor: pointer;
+}
+
+.templates-modal-sidebar button:hover {
+  background: #23262d;
+  color: #e4e6eb;
+}
+
+.templates-modal-sidebar button.active {
+  background: #2c3038;
+  color: #3a6df0;
+}
+
+.templates-modal-content {
+  flex: 1;
+  min-width: 0;
+  padding: 14px 16px;
+  overflow-y: auto;
+}
+
+.templates-modal-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 12px;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #e4e6eb;
+  cursor: pointer;
+}
+
+.templates-modal-section {
+  margin-bottom: 18px;
+}
+
+.templates-modal-section-header {
+  margin-bottom: 8px;
+}
+
+.templates-modal-section-header h4 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #c9cdd4;
 }
 
 /* "Importar objeto por foto" tile (ObjectsTab in AssetBrowser.tsx) — dashed

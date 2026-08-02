@@ -1,19 +1,32 @@
 import { forwardRef, useCallback, useEffect, useMemo, useRef } from 'react'
 import type { ThreeEvent } from '@react-three/fiber'
 import {
+  AdditiveBlending,
   BackSide,
+  type Blending,
+  BoxGeometry,
   BufferGeometry,
   Color,
+  ConeGeometry,
+  CylinderGeometry,
   type DirectionalLight,
+  DodecahedronGeometry,
   DoubleSide,
   Float32BufferAttribute,
   FrontSide,
+  IcosahedronGeometry,
   type Mesh,
+  MultiplyBlending,
+  NormalBlending,
   type Object3D,
   PositionalAudio,
   type PointLight,
   type Side,
+  SphereGeometry,
   type SpotLight,
+  SubtractiveBlending,
+  TorusGeometry,
+  TorusKnotGeometry,
 } from 'three'
 import {
   MeshLambertNodeMaterial,
@@ -35,7 +48,7 @@ import {
   vec3,
   vec4,
 } from 'three/tsl'
-import type { MaterialSide, MaterialType, SceneObject, ShadowMode } from '../types'
+import type { BlendMode, MaterialSide, MaterialType, SceneObject, ShadowMode } from '../types'
 import { useEditorStore } from '../state/useEditorStore'
 import { usePointerClick } from './usePointerClick'
 import {
@@ -56,6 +69,18 @@ const MATERIAL_SIDE: Record<MaterialSide, Side> = {
   front: FrontSide,
   back: BackSide,
   double: DoubleSide,
+}
+
+// See BlendMode in types.ts — plain renderer-level blend state (confirmed in
+// three/src/renderers/webgpu/utils/WebGPUPipelineUtils.js: the blend
+// descriptor is built straight off material.blending/material.transparent,
+// no TSL node graph involved), so it applies unmodified to our NodeMaterial
+// instances under WebGPURenderer.
+const BLEND_MODE: Record<BlendMode, Blending> = {
+  normal: NormalBlending,
+  additive: AdditiveBlending,
+  subtractive: SubtractiveBlending,
+  multiply: MultiplyBlending,
 }
 
 // Classic JSX material tags (`<meshStandardMaterial>` etc.) don't expose
@@ -228,7 +253,10 @@ function Material({ object }: { object: SceneObject }) {
   // (there's no declarative JSX prop-diffing for a `<primitive>`-attached
   // material, so this has to be done imperatively).
   const material = useMemo(() => new MATERIAL_CLASS[object.materialType](), [object.materialType])
-  const isTransparent = object.opacity < 1
+  // Additive/subtractive/multiply blending needs the transparent render path
+  // (back-to-front sort, no depth write) to composite correctly against the
+  // rest of the scene even at opacity 1 — see BlendMode in types.ts.
+  const isTransparent = object.opacity < 1 || object.blending !== 'normal'
 
   // videoMapAssetId and colorMapAssetId are mutually exclusive (enforced in
   // the Inspector UI) — video wins if somehow both are set.
@@ -262,6 +290,15 @@ function Material({ object }: { object: SceneObject }) {
     // (visible artifacts at edges, no blending with what's behind it).
     material.transparent = isTransparent
     material.depthWrite = !isTransparent
+    material.blending = BLEND_MODE[object.blending]
+    // WebGPUPipelineUtils._getBlending only implements Subtractive/Multiply
+    // under the premultiplied-alpha blend-factor formula — without this,
+    // WebGPURenderer logs '"...Blending" requires premultipliedAlpha = true'
+    // and falls through to an undefined blend state (confirmed by testing
+    // 'multiply' in-browser). Normal/Additive stay non-premultiplied (our
+    // colors/textures are already straight, non-premultiplied alpha).
+    material.premultipliedAlpha =
+      object.blending === 'subtractive' || object.blending === 'multiply'
     // No-op expando assignment for 'lambert'/'phong'/'toon' (same as
     // `flatShading` below) — those material classes have no roughness/
     // metalness concept, so this only actually does something for
@@ -283,6 +320,7 @@ function Material({ object }: { object: SceneObject }) {
     object.emissiveIntensity,
     object.side,
     object.opacity,
+    object.blending,
     object.roughness,
     object.metalness,
     object.dirtAmount,
@@ -319,31 +357,64 @@ function shadowProps(mode: ShadowMode) {
   }
 }
 
-function Geometry({ kind }: { kind: SceneObject['kind'] }) {
+// Same args as before per kind, just built imperatively (instead of
+// declarative `<boxGeometry args={...}/>` JSX) so a non-zero pivotOffset can
+// be baked into the geometry with a one-time `.translate()` — see
+// SceneObject.pivotOffset in types.ts. Translating the actual vertices
+// (rather than wrapping the mesh in an offset group) means `mesh.position`
+// keeps meaning exactly what it always has, just now coinciding with the
+// pivot instead of the geometric center — so TransformControls/raycasting/
+// snapToNeighbors.ts (which reads real world-space geometry via
+// Box3.setFromObject) all keep working unmodified. Only SelectionOutline.tsx
+// and ScaleFaceHandles.tsx hand-roll their own box math from
+// PRIMITIVE_BASE_SIZE + mesh.position and so need their own pivot
+// correction — see those files.
+function buildGeometry(kind: SceneObject['kind'], pivotOffset: [number, number, number]) {
   const [w, h, d] = PRIMITIVE_BASE_SIZE[kind]
+  let geometry: BufferGeometry
   switch (kind) {
-    case 'box':
-      return <boxGeometry args={[w, h, d]} />
     case 'sphere':
-      return <sphereGeometry args={[w / 2, 32, 32]} />
+      geometry = new SphereGeometry(w / 2, 32, 32)
+      break
     case 'cylinder':
-      return <cylinderGeometry args={[w / 2, w / 2, h, 32]} />
+      geometry = new CylinderGeometry(w / 2, w / 2, h, 32)
+      break
     case 'cone':
-      return <coneGeometry args={[w / 2, h, 32]} />
-    case 'plane':
-      return <boxGeometry args={[w, h, d]} />
+      geometry = new ConeGeometry(w / 2, h, 32)
+      break
     case 'torus':
-      return <torusGeometry args={[0.35, 0.15, 16, 48]} />
+      geometry = new TorusGeometry(0.35, 0.15, 16, 48)
+      break
     case 'pyramid':
       // Same as `cone` above, just 4 radial segments instead of 32.
-      return <coneGeometry args={[0.6, 1, 4]} />
+      geometry = new ConeGeometry(0.6, 1, 4)
+      break
     case 'icosahedron':
-      return <icosahedronGeometry args={[0.65, 0]} />
+      geometry = new IcosahedronGeometry(0.65, 0)
+      break
     case 'dodecahedron':
-      return <dodecahedronGeometry args={[0.65, 0]} />
+      geometry = new DodecahedronGeometry(0.65, 0)
+      break
     case 'torusKnot':
-      return <torusKnotGeometry args={[0.4, 0.12, 64, 8]} />
+      geometry = new TorusKnotGeometry(0.4, 0.12, 64, 8)
+      break
+    case 'box':
+    case 'plane':
+    default:
+      geometry = new BoxGeometry(w, h, d)
+      break
   }
+  const [ox, oy, oz] = pivotOffset
+  if (ox !== 0 || oy !== 0 || oz !== 0) geometry.translate(-ox, -oy, -oz)
+  return geometry
+}
+
+function Geometry({ object }: { object: SceneObject }) {
+  const [ox, oy, oz] = object.pivotOffset
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- ox/oy/oz above are the real dep, not the array reference
+  const geometry = useMemo(() => buildGeometry(object.kind, object.pivotOffset), [object.kind, ox, oy, oz])
+  useEffect(() => () => geometry.dispose(), [geometry])
+  return <primitive object={geometry} attach="geometry" />
 }
 
 // Bigger-than-the-icon invisible hit target for light objects, so a small
@@ -901,7 +972,7 @@ export const SceneObjectMesh = forwardRef<Mesh, { object: SceneObject }>(
         onPointerDown={onPointerDown}
         onPointerUp={onPointerUp}
       >
-        <Geometry kind={object.kind} />
+        <Geometry object={object} />
         <Material object={object} />
       </mesh>
     )

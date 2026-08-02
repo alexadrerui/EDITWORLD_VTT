@@ -40,6 +40,9 @@ export function ScaleFaceHandles({
   const { camera, gl } = useThree()
   const groupRef = useRef<Group>(null)
   const handleRefs = useRef<Record<string, Mesh | null>>({})
+  // Scratch vector reused every frame for the pivotOffset correction below,
+  // instead of allocating a new Vector3 each frame.
+  const pivotCorrectionRef = useRef(new Vector3())
 
   const baseHalf = useMemo(() => {
     const [w, h, d] = PRIMITIVE_BASE_SIZE[object.kind]
@@ -73,7 +76,15 @@ export function ScaleFaceHandles({
   useFrame(() => {
     const group = groupRef.current
     if (!group) return
-    group.position.copy(mesh.position)
+    // mesh.position is the object's rotation pivot (see SceneObject.pivotOffset
+    // in types.ts), not necessarily the geometric center once a hinge offset
+    // is set — same correction as SelectionOutline.tsx, so handles stay flush
+    // on the real geometry instead of floating off toward the pivot.
+    const [ox, oy, oz] = object.pivotOffset
+    const correction = pivotCorrectionRef.current
+      .set(-ox * mesh.scale.x, -oy * mesh.scale.y, -oz * mesh.scale.z)
+      .applyQuaternion(mesh.quaternion)
+    group.position.copy(mesh.position).add(correction)
     group.quaternion.copy(mesh.quaternion)
 
     // Fixed world-space margin added to each dimension (not a percentage —
@@ -112,7 +123,14 @@ export function ScaleFaceHandles({
     const startScale = mesh.scale.clone()
     const startPosition = mesh.position.clone()
     const startExtent = halfBaseOnAxis * startScale.getComponent(axisIndex)
-    const pivot = mesh.position.clone()
+    // The "keep the opposite face fixed" math below is anchored on the real
+    // geometric center, not mesh.position — those only coincide when
+    // pivotOffset is [0,0,0] (see SceneObject.pivotOffset in types.ts and the
+    // matching correction in the useFrame above).
+    const [pox, poy, poz] = object.pivotOffset
+    const pivotCorrection = new Vector3(-pox * startScale.x, -poy * startScale.y, -poz * startScale.z)
+      .applyQuaternion(mesh.quaternion)
+    const pivot = mesh.position.clone().add(pivotCorrection)
 
     const planeNormal = new Vector3()
     camera.getWorldDirection(planeNormal)

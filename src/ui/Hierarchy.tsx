@@ -1,18 +1,22 @@
 import { Fragment, useState, type MouseEvent } from 'react'
 import {
+  ArrowLeft,
   Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Download,
   Eye,
   EyeOff,
   FolderPlus,
   Group as GroupIcon,
+  HelpCircle,
   Home,
   Lock,
   Plus,
   Save,
   Search,
+  Store,
   Trash2,
   Unlock,
 } from 'lucide-react'
@@ -20,6 +24,8 @@ import { useEditorStore } from '../state/useEditorStore'
 import { PRIMITIVE_ICON as KIND_ICON } from '../scene/primitives'
 import type { SceneObject } from '../types'
 import { ConfirmDialog } from './ConfirmDialog'
+import { ImportModal } from './ImportModal'
+import { AssetStoreModal } from './AssetStoreModal'
 
 function ScenesSection() {
   const scenesIndex = useEditorStore((s) => s.scenesIndex)
@@ -54,15 +60,15 @@ function ScenesSection() {
     <div className="scenes-section">
       <div className="scenes-header">
         <button className="scenes-collapse" onClick={() => setCollapsed((v) => !v)}>
-          {collapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
           Cenas
+          {collapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
         </button>
         <button
           className="scenes-add"
           onClick={() => runOrConfirm(() => createScene())}
           title="Nova cena"
         >
-          <Plus size={14} />
+          <Plus size={17} />
         </button>
       </div>
 
@@ -223,6 +229,110 @@ function ObjectRow({
   )
 }
 
+// Back arrow + campaign title row (Spline-style panel header). The back
+// arrow is a placeholder — this project has no campaign-selection screen
+// yet, so it doesn't navigate anywhere. Title renames on double-click, same
+// pattern as ScenesSection's scene rename above.
+function CampaignHeader() {
+  const campaignName = useEditorStore((s) => s.campaignName)
+  const renameCampaign = useEditorStore((s) => s.renameCampaign)
+
+  const [editing, setEditing] = useState(false)
+  const [draftName, setDraftName] = useState('')
+
+  const commitRename = () => {
+    renameCampaign(draftName)
+    setEditing(false)
+  }
+
+  return (
+    <div className="hierarchy-topbar">
+      <button className="hierarchy-back" title="Voltar para seleção de campanhas (em breve)">
+        <ArrowLeft size={16} />
+      </button>
+
+      {editing ? (
+        <input
+          autoFocus
+          className="hierarchy-campaign-input"
+          value={draftName}
+          onChange={(e) => setDraftName(e.target.value)}
+          onBlur={commitRename}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') commitRename()
+            if (e.key === 'Escape') setEditing(false)
+          }}
+        />
+      ) : (
+        <span
+          className="hierarchy-campaign-name"
+          title={campaignName}
+          onDoubleClick={() => {
+            setDraftName(campaignName)
+            setEditing(true)
+          }}
+        >
+          {campaignName}
+        </span>
+      )}
+    </div>
+  )
+}
+
+// "Objetos" / "Ativos" panel switcher (Spline-style). "Ativos" is a
+// placeholder for now — this panel's asset browsing already lives in the
+// separate bottom AssetBrowser.tsx; wiring it in here is future work.
+function PanelTabs({
+  active,
+  onChange,
+}: {
+  active: 'objects' | 'assets'
+  onChange: (tab: 'objects' | 'assets') => void
+}) {
+  return (
+    <div className="hierarchy-tabs">
+      <button className={active === 'objects' ? 'active' : ''} onClick={() => onChange('objects')}>
+        Objetos
+      </button>
+      <button className={active === 'assets' ? 'active' : ''} onClick={() => onChange('assets')}>
+        Ativos
+      </button>
+    </div>
+  )
+}
+
+// Fixed footer row (Spline-style Modelos/Importar/Ajuda e feedback).
+// Asset Store opens AssetStoreModal — a separate browse/buy window, kept out
+// of the bottom AssetBrowser panel on purpose (that panel is for organizing
+// what you already own; a bought item would land there once purchasing is
+// real). Import opens ImportModal, a tile launcher for every real import
+// flow this project has. Help & Feedback stays a placeholder — no feedback
+// channel exists yet.
+function HierarchyFooter({
+  onOpenAssetStore,
+  onOpenImport,
+}: {
+  onOpenAssetStore: () => void
+  onOpenImport: () => void
+}) {
+  return (
+    <div className="hierarchy-footer">
+      <button title="Asset Store" onClick={onOpenAssetStore}>
+        <Store size={14} />
+        Asset Store
+      </button>
+      <button title="Importar" onClick={onOpenImport}>
+        <Download size={14} />
+        Import
+      </button>
+      <button title="Ajuda e feedback (em breve)">
+        <HelpCircle size={14} />
+        Help &amp; Feedback
+      </button>
+    </div>
+  )
+}
+
 export function Hierarchy() {
   const objects = useEditorStore((s) => s.objects)
   const groups = useEditorStore((s) => s.groups)
@@ -245,6 +355,9 @@ export function Hierarchy() {
   const [draftName, setDraftName] = useState('')
   const [query, setQuery] = useState('')
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+  const [panelTab, setPanelTab] = useState<'objects' | 'assets'>('objects')
+  const [importModalOpen, setImportModalOpen] = useState(false)
+  const [assetStoreModalOpen, setAssetStoreModalOpen] = useState(false)
 
   const startRename = (id: string, currentName: string) => {
     setEditingId(id)
@@ -299,26 +412,31 @@ export function Hierarchy() {
     <>
       {hierarchyVisible && (
         <div className="floating-panel hierarchy">
+          <CampaignHeader />
+          <PanelTabs active={panelTab} onChange={setPanelTab} />
+
+          {panelTab === 'assets' ? (
+            <p className="empty">Em breve</p>
+          ) : (
+            <>
           <ScenesSection />
 
-          <div className="objects-header">
-        <h3>Objetos</h3>
-        <button className="scenes-add" onClick={() => createGroup()} title="Novo grupo">
-          <FolderPlus size={14} />
-        </button>
-      </div>
-
-      {objects.length > 0 && (
-        <div className="hierarchy-search">
-          <Search size={13} />
-          <input
-            type="text"
-            placeholder="Procurar"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
-      )}
+          <div className="hierarchy-search-row">
+            {objects.length > 0 && (
+              <div className="hierarchy-search">
+                <Search size={13} />
+                <input
+                  type="text"
+                  placeholder="Procurar"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+              </div>
+            )}
+            <button className="scenes-add" onClick={() => createGroup()} title="Novo grupo">
+              <FolderPlus size={14} />
+            </button>
+          </div>
 
       {objects.length === 0 && <p className="empty">Nenhum objeto na cena</p>}
       {objects.length > 0 && isSearching && filteredObjects.length === 0 && (
@@ -430,6 +548,13 @@ export function Hierarchy() {
           </ul>
         </div>
       )}
+            </>
+          )}
+
+          <HierarchyFooter
+            onOpenAssetStore={() => setAssetStoreModalOpen(true)}
+            onOpenImport={() => setImportModalOpen(true)}
+          />
         </div>
       )}
       <button
@@ -439,6 +564,9 @@ export function Hierarchy() {
       >
         {hierarchyVisible ? <ChevronLeft size={13} /> : <ChevronRight size={13} />}
       </button>
+
+      {importModalOpen && <ImportModal onClose={() => setImportModalOpen(false)} />}
+      {assetStoreModalOpen && <AssetStoreModal onClose={() => setAssetStoreModalOpen(false)} />}
     </>
   )
 }

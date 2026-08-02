@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { BoxGeometry, EdgesGeometry, type Group, type Mesh } from 'three'
+import { BoxGeometry, EdgesGeometry, type Group, type Mesh, Vector3 } from 'three'
 import type { SceneObject } from '../types'
 import { PRIMITIVE_BASE_SIZE, SELECTION_OUTLINE_MARGIN } from './primitives'
 
@@ -21,11 +21,23 @@ const OUTLINE_GEOMETRY = new EdgesGeometry(new BoxGeometry(1, 1, 1))
 export function SelectionOutline({ mesh, object }: { mesh: Mesh; object: SceneObject }) {
   const groupRef = useRef<Group>(null)
   const baseSize = PRIMITIVE_BASE_SIZE[object.kind]
+  // Scratch vector, reused every frame instead of allocated — see the
+  // pivotOffset correction below.
+  const correctionRef = useRef(new Vector3())
 
   useFrame(() => {
     const group = groupRef.current
     if (!group) return
-    group.position.copy(mesh.position)
+    // mesh.position is the object's rotation pivot (see SceneObject.pivotOffset
+    // in types.ts), which no longer coincides with the geometric center once
+    // a hinge offset is set — the outline needs to be centered on the real
+    // geometry, not the pivot, so it stays wrapped around the object instead
+    // of floating off toward whichever edge the pivot was moved to.
+    const [ox, oy, oz] = object.pivotOffset
+    const correction = correctionRef.current
+      .set(-ox * mesh.scale.x, -oy * mesh.scale.y, -oz * mesh.scale.z)
+      .applyQuaternion(mesh.quaternion)
+    group.position.copy(mesh.position).add(correction)
     group.quaternion.copy(mesh.quaternion)
     group.scale.set(
       baseSize[0] * mesh.scale.x + SELECTION_OUTLINE_MARGIN,

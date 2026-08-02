@@ -43,6 +43,16 @@ export type ShadowMode = 'none' | 'cast' | 'receive' | 'both'
 // default here so existing objects keep rendering exactly as before.
 export type MaterialType = 'standard' | 'lambert' | 'phong' | 'physical' | 'toon'
 
+// How a (transparent-ish) material's output combines with what's already in
+// the framebuffer — mirrors THREE.NormalBlending/AdditiveBlending/
+// SubtractiveBlending/MultiplyBlending (see webgl_materials_blending.html).
+// 'normal' is the default (ordinary alpha compositing); the other three are
+// mainly useful for glow/fire/magic-effect props (additive) or tinting/void
+// effects (subtractive/multiply). Plain renderer-level blend state, not a TSL
+// node graph, so it applies unmodified to our NodeMaterial instances under
+// WebGPURenderer — see SceneObjectMesh.tsx's Material component.
+export type BlendMode = 'normal' | 'additive' | 'subtractive' | 'multiply'
+
 // Per-light shadow map resolution preset, matching Spline's Light > Shadows >
 // Resolution dropdown (Low/Normal/High) — see PRIMITIVE's SHADOW_MAP_SIZE.
 export type ShadowResolution = 'low' | 'normal' | 'high'
@@ -96,11 +106,16 @@ export interface SceneObject {
   emissiveColor: string
   emissiveIntensity: number
   // Material opacity, 0-1 (default 1 = fully opaque). `transparent` on the
-  // three.js material is derived from this (< 1) rather than stored as its
-  // own field — there's no case where a user wants "transparent" blending
-  // mode active while opacity is still 1, so a separate toggle would just be
-  // a second control that has to agree with this one.
+  // three.js material is derived from `opacity < 1 || blending !== 'normal'`
+  // rather than stored as its own field — plain alpha transparency has no
+  // case where a user wants it active while opacity is still 1, but additive/
+  // subtractive/multiply `blending` below does (e.g. a full-opacity glow
+  // sprite), so both feed the same derived flag. See SceneObjectMesh.tsx's
+  // Material component.
   opacity: number
+  // See BlendMode above. Default 'normal' — ordinary alpha compositing,
+  // identical to every object before this field existed.
+  blending: BlendMode
   // Light-only fields (kind is a LightKind) — unused/ignored for meshes,
   // same convention as wireframe/flatShading being unused for planes etc.
   // `color` above doubles as the light's color.
@@ -144,6 +159,18 @@ export interface SceneObject {
   // length structured data and SceneObject stays flat (scalars/fixed tuples
   // only) everywhere else. One clip per object for now (see AnimationClip).
   animationId: string | null
+  // Local-space (unscaled) offset from the primitive's geometric center to
+  // the point that should act as its rotation/scale origin instead — e.g.
+  // [0, height/2, -depth/2] moves the origin to a box's top-back edge, so
+  // rotating it hinges like a chest lid instead of spinning in place around
+  // its own center. Applied by translating the built geometry itself (see
+  // Geometry in SceneObjectMesh.tsx), not via a wrapper transform, so
+  // TransformControls/raycasting/snapToNeighbors keep working unmodified —
+  // they all already operate on `mesh.position`, which simply now coincides
+  // with the pivot instead of the centroid. MeshKind only (default [0,0,0],
+  // meaning "centered," matches every object created before this field
+  // existed); ignored for lights/sound/imported models.
+  pivotOffset: [number, number, number]
 }
 
 // One pose of an AnimationClip (see below) — always a full position+rotation+
@@ -339,7 +366,6 @@ export type AssetBrowserTab =
   | 'scenes'
   | 'objects'
   | 'textures'
-  | 'store'
   | 'models'
   | 'audio'
   | 'video'

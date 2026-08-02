@@ -3,10 +3,10 @@ import { TransformControls } from '@react-three/drei/core/TransformControls'
 import type { Mesh } from 'three'
 import { useEditorStore } from '../state/useEditorStore'
 import { isLightKind, isSoundKind } from './primitives'
+import { CompactGizmo } from './CompactGizmo'
 import { ScaleFaceHandles } from './ScaleFaceHandles'
 import { SceneObjectMesh } from './SceneObjectMesh'
 import { SelectionOutline } from './SelectionOutline'
-import { snapPositionToNeighbors } from './snapToNeighbors'
 
 // "Escalar" (locked) uses our own Loftcraft-style face handles (see
 // ScaleFaceHandles.tsx) instead of TransformControls, so TransformControls
@@ -110,39 +110,40 @@ export function SceneObjects({ orbitControlsRef }: { orbitControlsRef: React.Ref
         />
       )}
 
-      {selectedMesh && selectedObject && !selectedLocked && effectiveTransformMode !== 'scale' && (
+      {selectedMesh && selectedObject && !selectedLocked && effectiveTransformMode === 'scaleFree' && (
         <TransformControls
           ref={controlsRefCallback.current}
           object={selectedMesh}
-          mode={effectiveTransformMode === 'scaleFree' ? 'scale' : effectiveTransformMode}
+          mode="scale"
           space={gizmoSpace}
-          translationSnap={selectedObject.snapToObjects ? null : positionSnap}
-          rotationSnap={rotationSnap !== null ? (rotationSnap * Math.PI) / 180 : null}
-          onObjectChange={() => {
-            if (!selectedObject.snapToObjects || transformMode !== 'translate') return
-            const otherMeshes = objects
-              .filter((o) => o.id !== selectedObject.id)
-              .map((o) => meshRefs.current.get(o.id))
-              .filter((mesh): mesh is Mesh => mesh !== undefined)
-            snapPositionToNeighbors(selectedMesh, otherMeshes)
-          }}
           onMouseDown={() => {
             if (orbitControlsRef.current) orbitControlsRef.current.enabled = false
           }}
           onMouseUp={() => {
             if (orbitControlsRef.current) orbitControlsRef.current.enabled = true
             updateObject(selectedObject.id, {
-              position: selectedMesh.position.toArray() as [number, number, number],
-              rotation: [
-                selectedMesh.rotation.x,
-                selectedMesh.rotation.y,
-                selectedMesh.rotation.z,
-              ],
               scale: selectedMesh.scale.toArray() as [number, number, number],
             })
           }}
         />
       )}
+
+      {selectedMesh &&
+        selectedObject &&
+        !selectedLocked &&
+        (effectiveTransformMode === 'translate' || effectiveTransformMode === 'rotate') && (
+          <CompactGizmo
+            mesh={selectedMesh}
+            object={selectedObject}
+            objects={objects}
+            meshRefs={meshRefs}
+            updateObject={updateObject}
+            orbitControlsRef={orbitControlsRef}
+            gizmoSpace={gizmoSpace}
+            positionSnap={selectedObject.snapToObjects ? null : positionSnap}
+            rotationSnap={rotationSnap !== null ? (rotationSnap * Math.PI) / 180 : null}
+          />
+        )}
     </>
   )
 }

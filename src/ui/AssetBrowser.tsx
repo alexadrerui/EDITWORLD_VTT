@@ -11,7 +11,6 @@ import {
   Layers,
   Package,
   Plus,
-  Store,
   Video,
   Volume2,
   X,
@@ -27,6 +26,12 @@ import { ItemContextMenu } from './ItemContextMenu'
 import { useItemContextMenu } from './useItemContextMenu'
 import type { AssetBrowserTab, AssetFolder, AssetFolderTab } from '../types'
 
+// "Asset Store" used to live here as a tab (see git history) — it moved out
+// to its own AssetStoreModal.tsx, opened from the Hierarchy panel's footer
+// instead, because browsing/purchasing is a separate concern from this
+// panel's job (organizing what's already yours). A bought item is meant to
+// land back in here (Modelos/Objetos/etc., depending on kind) once a real
+// store backend exists.
 const TABS: { value: AssetBrowserTab; label: string; icon: LucideIcon }[] = [
   { value: 'scenes', label: 'Cenas', icon: Layers },
   { value: 'objects', label: 'Objetos', icon: Boxes },
@@ -35,19 +40,6 @@ const TABS: { value: AssetBrowserTab; label: string; icon: LucideIcon }[] = [
   { value: 'video', label: 'Vídeo', icon: Video },
   { value: 'audio', label: 'Áudio', icon: Volume2 },
   { value: 'animations', label: 'Animação', icon: Clapperboard },
-  { value: 'store', label: 'Asset Store', icon: Store },
-]
-
-// Purely decorative — this project has no asset store backend. Placeholder
-// cards only, matching the visual weight of a real catalog (see
-// editworld-vtt skill notes on the Interverse Engine comparison).
-const MOCK_STORE_ITEMS = [
-  'Kit de masmorra',
-  'Pacote de vegetação',
-  'Rochas e penhascos',
-  'Mobília medieval',
-  'Ruínas antigas',
-  'Pacote de cristais',
 ]
 
 function ScenesTab() {
@@ -771,21 +763,6 @@ function AnimationsTab() {
   )
 }
 
-function StoreTab() {
-  return (
-    <div className="asset-grid">
-      {MOCK_STORE_ITEMS.map((name) => (
-        <div key={name} className="asset-tile asset-tile-mock">
-          <span className="asset-tile-icon">
-            <Store size={22} />
-          </span>
-          <span className="asset-tile-label">{name}</span>
-        </div>
-      ))}
-    </div>
-  )
-}
-
 export function AssetBrowser() {
   const open = useEditorStore((s) => s.assetBrowserOpen)
   const toggleOpen = useEditorStore((s) => s.toggleAssetBrowser)
@@ -816,7 +793,6 @@ export function AssetBrowser() {
             {activeTab === 'video' && <VideoTab />}
             {activeTab === 'audio' && <AudioTab />}
             {activeTab === 'animations' && <AnimationsTab />}
-            {activeTab === 'store' && <StoreTab />}
           </div>
         </div>
       )}

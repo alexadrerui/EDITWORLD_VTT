@@ -84,6 +84,19 @@ function saveScenesIndex(index: SceneMeta[]) {
   localStorage.setItem(INDEX_KEY, JSON.stringify(index))
 }
 
+// Campaign title shown in the Hierarchy panel's header (Spline-style "back +
+// title" row) — a single global value, same "plain localStorage string, no
+// per-scene versioning" shape as CURRENT_KEY above.
+const CAMPAIGN_NAME_KEY = 'editworld-vtt:campaign-name'
+
+function loadCampaignName(): string {
+  return localStorage.getItem(CAMPAIGN_NAME_KEY) || 'Minha Campanha'
+}
+
+function saveCampaignName(name: string) {
+  localStorage.setItem(CAMPAIGN_NAME_KEY, name)
+}
+
 // Custom (photo-imported placeholder) assets, see ImportStudio.tsx — a
 // global library like scenesIndex, not per-scene content, so it persists
 // immediately on every mutation instead of waiting for the scene's own
@@ -165,6 +178,7 @@ function loadSceneData(id: string): SceneData {
           emissiveColor: '#000000',
           emissiveIntensity: 0,
           opacity: 1,
+          blending: 'normal',
           roughness: 1,
           metalness: 0,
           dirtAmount: 0,
@@ -173,6 +187,7 @@ function loadSceneData(id: string): SceneData {
           colorMapAssetId: null,
           videoMapAssetId: null,
           animationId: null,
+          pivotOffset: [0, 0, 0],
           ...LIGHT_DEFAULTS,
           ...SOUND_DEFAULTS,
           ...o,
@@ -278,6 +293,7 @@ function createPrimitive(kind: PrimitiveKind, overrides?: Partial<SceneObject>):
     emissiveColor: '#000000',
     emissiveIntensity: 0,
     opacity: 1,
+    blending: 'normal',
     roughness: 1,
     metalness: 0,
     dirtAmount: 0,
@@ -286,6 +302,7 @@ function createPrimitive(kind: PrimitiveKind, overrides?: Partial<SceneObject>):
     colorMapAssetId: null,
     videoMapAssetId: null,
     animationId: null,
+    pivotOffset: [0, 0, 0],
     ...LIGHT_DEFAULTS,
     ...SOUND_DEFAULTS,
     // Directional lights have no distance falloff, so the shared light
@@ -308,6 +325,7 @@ const initialCustomAssets = loadCustomAssets()
 const initialAssetFolders = loadAssetFolders()
 
 interface EditorState {
+  campaignName: string
   scenesIndex: SceneMeta[]
   currentSceneId: string
   objects: SceneObject[]
@@ -524,6 +542,7 @@ interface EditorState {
   createScene: () => void
   switchScene: (id: string) => void
   renameScene: (id: string, name: string) => void
+  renameCampaign: (name: string) => void
 }
 
 async function importAndRegister(
@@ -546,6 +565,7 @@ function nextFolderName(existing: AssetFolder[], tab: AssetFolderTab): string {
 }
 
 export const useEditorStore = create<EditorState>((set, get) => ({
+  campaignName: loadCampaignName(),
   scenesIndex: initialScenesIndex,
   currentSceneId: initialSceneId,
   objects: initialSceneData.objects,
@@ -757,8 +777,75 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       for (const key of Object.keys(patch) as (keyof SceneObject)[]) {
         before[key] = current[key]
       }
+
+      // Mirror a transform edit into whichever keyframe is actively being
+      // posed (single-object AnimationClip or Cutscene track), so "select a
+      // keyframe, then move the object with the viewport gizmo" actually
+      // captures the pose. Centralized here rather than at each UI call site
+      // — the gizmo/ScaleFaceHandles in SceneObjects.tsx only ever call
+      // updateObject, they have no notion of "which keyframe is active" —
+      // so this is the one place every transform edit, from any input
+      // method, necessarily passes through.
+      const transformPatch: Partial<Pick<SceneObject, 'position' | 'rotation' | 'scale'>> = {}
+      for (const key of ['position', 'rotation', 'scale'] as const) {
+        if (patch[key] !== undefined) transformPatch[key] = patch[key]
+      }
+      const hasTransformPatch = Object.keys(transformPatch).length > 0
+
+      let animations = state.animations
+      if (
+        hasTransformPatch &&
+        state.editingAnimationClipId &&
+        state.editingKeyframeId &&
+        state.editingAnimationClipId === current.animationId
+      ) {
+        const clipId = state.editingAnimationClipId
+        const keyframeId = state.editingKeyframeId
+        animations = state.animations.map((a) =>
+          a.id === clipId
+            ? {
+                ...a,
+                keyframes: a.keyframes.map((k) =>
+                  k.id === keyframeId ? { ...k, ...transformPatch } : k,
+                ),
+              }
+            : a,
+        )
+      }
+
+      let cutscenes = state.cutscenes
+      if (hasTransformPatch && state.editingCutsceneId && state.editingCutsceneKeyframeId) {
+        const cutsceneId = state.editingCutsceneId
+        const keyframeId = state.editingCutsceneKeyframeId
+        const track = state.cutscenes
+          .find((c) => c.id === cutsceneId)
+          ?.tracks.find((t) => t.objectId === id)
+        if (track?.keyframes.some((k) => k.id === keyframeId)) {
+          const trackId = track.id
+          cutscenes = state.cutscenes.map((c) =>
+            c.id === cutsceneId
+              ? {
+                  ...c,
+                  tracks: c.tracks.map((t) =>
+                    t.id === trackId
+                      ? {
+                          ...t,
+                          keyframes: t.keyframes.map((k) =>
+                            k.id === keyframeId ? { ...k, ...transformPatch } : k,
+                          ),
+                        }
+                      : t,
+                  ),
+                }
+              : c,
+          )
+        }
+      }
+
       return {
         objects: state.objects.map((o) => (o.id === id ? { ...o, ...patch } : o)),
+        animations,
+        cutscenes,
         isDirty: true,
         undoStack: pushHistory(state.undoStack, { type: 'update', id, before, after: patch }),
         redoStack: [],
@@ -1421,6 +1508,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const scenesIndex = get().scenesIndex.map((s) => (s.id === id ? { ...s, name: trimmed } : s))
     saveScenesIndex(scenesIndex)
     set({ scenesIndex })
+  },
+
+  renameCampaign: (name) => {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    saveCampaignName(trimmed)
+    set({ campaignName: trimmed })
   },
 }))
 

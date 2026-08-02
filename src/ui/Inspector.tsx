@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
+import { Euler, Vector3 } from 'three'
 import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Crosshair,
   Film,
   Focus,
   ImageOff,
@@ -14,6 +16,7 @@ import {
   Trash2,
   Unlink2,
   Upload,
+  X,
 } from 'lucide-react'
 import { useEditorStore } from '../state/useEditorStore'
 import {
@@ -27,52 +30,17 @@ import { MultiSelectionInspector } from './MultiSelectionInspector'
 import { SceneInspector } from './SceneInspector'
 import { useDropdown } from './useDropdown'
 import { rejectIfNotGlb, useImportedModel } from '../scene/assetLoaders'
-import type { MaterialSide, MaterialType, SceneObject, ShadowMode, ShadowResolution } from '../types'
+import type {
+  BlendMode,
+  MaterialSide,
+  MaterialType,
+  SceneObject,
+  ShadowMode,
+  ShadowResolution,
+} from '../types'
 
 function formatMeters(value: number) {
   return `${value.toFixed(2).replace('.', ',')} m`
-}
-
-// Mirrors a transform patch into the actively-edited keyframe, if any (see
-// AnimationPanel.tsx's selectKeyframeForEditing) — shared by the default
-// mesh body and ImportedModelInspector's position/rotation/scale handlers,
-// the only two kinds animation supports in v1 (not lights/sound). The
-// object.animationId check guards against a stale editingAnimationClipId
-// left over from a previously-selected object.
-function useAnimationKeyframeMirror(object: SceneObject | undefined) {
-  const editingAnimationClipId = useEditorStore((s) => s.editingAnimationClipId)
-  const editingKeyframeId = useEditorStore((s) => s.editingKeyframeId)
-  const updateKeyframe = useEditorStore((s) => s.updateKeyframe)
-  return (patch: Partial<Pick<SceneObject, 'position' | 'rotation' | 'scale'>>) => {
-    if (editingAnimationClipId && editingKeyframeId && editingAnimationClipId === object?.animationId) {
-      updateKeyframe(editingAnimationClipId, editingKeyframeId, patch)
-    }
-  }
-}
-
-// Same mirroring, for CutsceneStudio.tsx's multi-object tracks instead of a
-// single AnimationClip — separate hook (rather than folding into the one
-// above) since a cutscene keyframe is scoped to a *track* (objectId + own
-// keyframe list), not a clip directly. Both hooks are called from the same
-// handlers below; each is a cheap no-op when its own editing state isn't
-// active, so posing a plain object (neither system active) costs nothing
-// extra.
-function useCutsceneKeyframeMirror(object: SceneObject | undefined) {
-  const editingCutsceneId = useEditorStore((s) => s.editingCutsceneId)
-  const editingCutsceneKeyframeId = useEditorStore((s) => s.editingCutsceneKeyframeId)
-  const track = useEditorStore((s) =>
-    s.cutscenes.find((c) => c.id === s.editingCutsceneId)?.tracks.find((t) => t.objectId === object?.id),
-  )
-  const updateCutsceneKeyframe = useEditorStore((s) => s.updateCutsceneKeyframe)
-  return (patch: Partial<Pick<SceneObject, 'position' | 'rotation' | 'scale'>>) => {
-    if (
-      editingCutsceneId &&
-      editingCutsceneKeyframeId &&
-      track?.keyframes.some((k) => k.id === editingCutsceneKeyframeId)
-    ) {
-      updateCutsceneKeyframe(editingCutsceneId, track.id, editingCutsceneKeyframeId, patch)
-    }
-  }
 }
 
 // "Animação" field-section shared by the default mesh body and
@@ -290,6 +258,13 @@ const MATERIAL_TYPE_OPTIONS: { value: MaterialType; label: string }[] = [
   { value: 'phong', label: 'Phong' },
   { value: 'physical', label: 'Físico' },
   { value: 'toon', label: 'Toon' },
+]
+
+const BLEND_MODE_OPTIONS: { value: BlendMode; label: string }[] = [
+  { value: 'normal', label: 'Normal' },
+  { value: 'additive', label: 'Aditivo' },
+  { value: 'subtractive', label: 'Subtrativo' },
+  { value: 'multiply', label: 'Multiplicar' },
 ]
 
 const SHADOW_OPTIONS: { value: ShadowMode; label: string }[] = [
@@ -535,8 +510,6 @@ function ImportedModelInspector({ object }: { object: SceneObject }) {
   // doesn't re-parse the GLB, it just reads the already-resolved textures
   // list alongside the viewport's own clone.
   const { status: modelStatus, textures: modelTextures } = useImportedModel(object.assetId)
-  const mirrorToKeyframe = useAnimationKeyframeMirror(object)
-  const mirrorToCutsceneKeyframe = useCutsceneKeyframeMirror(object)
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -609,30 +582,18 @@ function ImportedModelInspector({ object }: { object: SceneObject }) {
         <Vector3Row
           label="Posição"
           value={object.position}
-          onChange={(position) => {
-            updateObject(object.id, { position })
-            mirrorToKeyframe({ position })
-            mirrorToCutsceneKeyframe({ position })
-          }}
+          onChange={(position) => updateObject(object.id, { position })}
         />
         <Vector3Row
           label="Rotação"
           value={object.rotation}
-          onChange={(rotation) => {
-            updateObject(object.id, { rotation })
-            mirrorToKeyframe({ rotation })
-            mirrorToCutsceneKeyframe({ rotation })
-          }}
+          onChange={(rotation) => updateObject(object.id, { rotation })}
           step={0.05}
         />
         <Vector3Row
           label="Escala"
           value={object.scale}
-          onChange={(scale) => {
-            updateObject(object.id, { scale })
-            mirrorToKeyframe({ scale })
-            mirrorToCutsceneKeyframe({ scale })
-          }}
+          onChange={(scale) => updateObject(object.id, { scale })}
         />
       </div>
 
@@ -826,11 +787,6 @@ export function Inspector() {
   const textureInputRef = useRef<HTMLInputElement>(null)
   const videoInputRef = useRef<HTMLInputElement>(null)
   const object = objects.find((o) => o.id === selectedId)
-  // Called unconditionally (before the branches below, some of which return
-  // early with `object` still undefined) — see useAnimationKeyframeMirror's
-  // own optional-object handling.
-  const mirrorToKeyframe = useAnimationKeyframeMirror(object)
-  const mirrorToCutsceneKeyframe = useCutsceneKeyframeMirror(object)
 
   const collapseToggle = (
     <button
@@ -845,6 +801,10 @@ export function Inspector() {
   // Local, not persisted per-object — a workflow toggle (like Spline's), not
   // content about the object itself.
   const [scaleLocked, setScaleLocked] = useState(false)
+  // Whether the "Edit Pivot" popover (Spline-style, opened from the
+  // Transformar section header) is open — same "ephemeral UI state" bucket
+  // as scaleLocked above.
+  const [editPivotOpen, setEditPivotOpen] = useState(false)
 
   // Keyboard shortcuts (R/S/F/Del/.), like the hints shown next to each
   // action below — ignored while typing in a field so they don't hijack
@@ -938,23 +898,46 @@ export function Inspector() {
   const handleScaleChange = (next: [number, number, number]) => {
     if (!scaleLocked) {
       updateObject(object.id, { scale: next })
-      mirrorToKeyframe({ scale: next })
-      mirrorToCutsceneKeyframe({ scale: next })
       return
     }
     const prev = object.scale
     const changedIndex = next.findIndex((v, i) => v !== prev[i])
     if (changedIndex === -1) {
       updateObject(object.id, { scale: next })
-      mirrorToKeyframe({ scale: next })
-      mirrorToCutsceneKeyframe({ scale: next })
       return
     }
     const ratio = prev[changedIndex] !== 0 ? next[changedIndex] / prev[changedIndex] : 1
     const scale = prev.map((v) => v * ratio) as [number, number, number]
     updateObject(object.id, { scale })
-    mirrorToKeyframe({ scale })
-    mirrorToCutsceneKeyframe({ scale })
+  }
+
+  // Moving the pivot must not visibly move the object — pivotOffset is baked
+  // into the geometry (see buildGeometry in SceneObjectMesh.tsx), so shifting
+  // it alone would translate every vertex under a fixed `position`. Spline's
+  // own Edit Pivot panel keeps the mesh stationary and updates its Position
+  // field instead when you edit the pivot (verified by testing it directly);
+  // this replicates that by compensating `position` with the pivot delta
+  // rotated/scaled into world space — same correction math as the pivot↔
+  // center conversion in ScaleFaceHandles.tsx/SelectionOutline.tsx, just
+  // solved for "keep the mesh fixed" instead of "find the geometric center."
+  const handlePivotChange = (nextPivot: [number, number, number]) => {
+    const prevPivot = object.pivotOffset
+    const delta = new Vector3(
+      nextPivot[0] - prevPivot[0],
+      nextPivot[1] - prevPivot[1],
+      nextPivot[2] - prevPivot[2],
+    )
+      .multiply(new Vector3(...object.scale))
+      .applyEuler(new Euler(...object.rotation))
+
+    updateObject(object.id, {
+      pivotOffset: nextPivot,
+      position: [
+        object.position[0] + delta.x,
+        object.position[1] + delta.y,
+        object.position[2] + delta.z,
+      ],
+    })
   }
 
   return (
@@ -1034,25 +1017,26 @@ export function Inspector() {
         </button>
       </div>
 
-      <div className="field-section-label">Transformar</div>
+      <div className="field-section-label-row">
+        <div className="field-section-label">Transformar</div>
+        <button
+          className={`edit-pivot-toggle ${editPivotOpen ? 'active' : ''}`}
+          onClick={() => setEditPivotOpen((v) => !v)}
+          title="Editar pivô"
+        >
+          <Crosshair size={14} />
+        </button>
+      </div>
       <div className="selection-fields">
         <Vector3Row
           label="Posição"
           value={object.position}
-          onChange={(position) => {
-            updateObject(object.id, { position })
-            mirrorToKeyframe({ position })
-            mirrorToCutsceneKeyframe({ position })
-          }}
+          onChange={(position) => updateObject(object.id, { position })}
         />
         <Vector3Row
           label="Rotação"
           value={object.rotation}
-          onChange={(rotation) => {
-            updateObject(object.id, { rotation })
-            mirrorToKeyframe({ rotation })
-            mirrorToCutsceneKeyframe({ rotation })
-          }}
+          onChange={(rotation) => updateObject(object.id, { rotation })}
           step={0.05}
         />
         <Vector3Row
@@ -1123,6 +1107,14 @@ export function Inspector() {
             onChange={(opacity) =>
               updateObject(object.id, { opacity: Math.min(1, Math.max(0, opacity)) })
             }
+          />
+        </div>
+        <div className="field-row">
+          <span className="field-label">Mesclagem</span>
+          <FieldDropdown
+            options={BLEND_MODE_OPTIONS}
+            value={object.blending}
+            onChange={(blending) => updateObject(object.id, { blending })}
           />
         </div>
         <div className="field-row">
@@ -1288,6 +1280,22 @@ export function Inspector() {
       </div>
         </div>
       )}
+
+      {inspectorVisible && editPivotOpen && (
+        <div className="edit-pivot-panel">
+          <div className="edit-pivot-panel-header">
+            <h4>Editar pivô</h4>
+            <button onClick={() => setEditPivotOpen(false)} title="Fechar">
+              <X size={14} />
+            </button>
+          </div>
+          <Vector3Row label="Pivô" value={object.pivotOffset} onChange={handlePivotChange} step={0.05} />
+          <p className="edit-pivot-hint">
+            Desloca a origem de rotação/escala dentro do objeto sem mover a Posição.
+          </p>
+        </div>
+      )}
+
       {collapseToggle}
     </>
   )
