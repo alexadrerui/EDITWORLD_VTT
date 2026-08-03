@@ -1523,4 +1523,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 // `assets` starts as [] for one tick and then hydrates; UI reading `assets`
 // (AssetBrowser, Inspector texture pickers, etc.) is expected to just render
 // an empty library until this resolves, same as any other loading state.
-listAssets().then((assets) => useEditorStore.setState({ assets }))
+listAssets()
+  .then((assets) => useEditorStore.setState({ assets }))
+  .catch((error) => console.error('Failed to load assets from IndexedDB', error))
