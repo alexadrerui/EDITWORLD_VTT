@@ -257,6 +257,91 @@ function applyRedoSingle(objects: SceneObject[], entry: SingleHistoryEntry): Sce
   return objects.map((o) => (o.id === entry.id ? { ...o, ...entry.after } : o))
 }
 
+// Shared by updateObject and updateObjects: computes one object's patch,
+// its undo entry, and the keyframe-mirroring side effect, against a
+// *working* copy of objects/animations/cutscenes rather than state directly
+// — updateObjects threads that working copy through several calls in one
+// set(), so each subsequent object sees the previous ones' changes already
+// applied (relevant if a patch ever referenced another just-updated object,
+// though today's callers never do).
+function computeObjectUpdate(
+  editing: {
+    editingAnimationClipId: string | null
+    editingKeyframeId: string | null
+    editingCutsceneId: string | null
+    editingCutsceneKeyframeId: string | null
+  },
+  objects: SceneObject[],
+  animations: AnimationClip[],
+  cutscenes: Cutscene[],
+  id: string,
+  patch: Partial<SceneObject>,
+): { objects: SceneObject[]; animations: AnimationClip[]; cutscenes: Cutscene[]; entry: SingleHistoryEntry } | null {
+  const current = objects.find((o) => o.id === id)
+  if (!current) return null
+  const before: Record<string, unknown> = {}
+  for (const key of Object.keys(patch) as (keyof SceneObject)[]) {
+    before[key] = current[key]
+  }
+
+  const transformPatch: Partial<Pick<SceneObject, 'position' | 'rotation' | 'scale'>> = {}
+  for (const key of ['position', 'rotation', 'scale'] as const) {
+    if (patch[key] !== undefined) transformPatch[key] = patch[key]
+  }
+  const hasTransformPatch = Object.keys(transformPatch).length > 0
+
+  let nextAnimations = animations
+  if (
+    hasTransformPatch &&
+    editing.editingAnimationClipId &&
+    editing.editingKeyframeId &&
+    editing.editingAnimationClipId === current.animationId
+  ) {
+    const clipId = editing.editingAnimationClipId
+    const keyframeId = editing.editingKeyframeId
+    nextAnimations = animations.map((a) =>
+      a.id === clipId
+        ? {
+            ...a,
+            keyframes: a.keyframes.map((k) => (k.id === keyframeId ? { ...k, ...transformPatch } : k)),
+          }
+        : a,
+    )
+  }
+
+  let nextCutscenes = cutscenes
+  if (hasTransformPatch && editing.editingCutsceneId && editing.editingCutsceneKeyframeId) {
+    const cutsceneId = editing.editingCutsceneId
+    const keyframeId = editing.editingCutsceneKeyframeId
+    const track = cutscenes.find((c) => c.id === cutsceneId)?.tracks.find((t) => t.objectId === id)
+    if (track?.keyframes.some((k) => k.id === keyframeId)) {
+      const trackId = track.id
+      nextCutscenes = cutscenes.map((c) =>
+        c.id === cutsceneId
+          ? {
+              ...c,
+              tracks: c.tracks.map((t) =>
+                t.id === trackId
+                  ? {
+                      ...t,
+                      keyframes: t.keyframes.map((k) => (k.id === keyframeId ? { ...k, ...transformPatch } : k)),
+                    }
+                  : t,
+              ),
+            }
+          : c,
+      )
+    }
+  }
+
+  return {
+    objects: objects.map((o) => (o.id === id ? { ...o, ...patch } : o)),
+    animations: nextAnimations,
+    cutscenes: nextCutscenes,
+    entry: { type: 'update', id, before, after: patch },
+  }
+}
+
 let nextObjectId = 1
 let nextGroupId = 1
 
@@ -427,6 +512,12 @@ interface EditorState {
   removeObject: (id: string) => void
   removeObjects: (ids: string[]) => void
   updateObject: (id: string, patch: Partial<SceneObject>) => void
+  // Same per-object logic as updateObject (including the animation/cutscene
+  // keyframe mirroring below), but applied to several objects in one set()
+  // call so they land in a single 'batch' history entry — one Ctrl+Z undoes
+  // the whole group drag, not one object's slice of it. See the multi-select
+  // gizmo in CompactGizmo.tsx, its only caller.
+  updateObjects: (updates: { id: string; patch: Partial<SceneObject> }[]) => void
   toggleLocked: (id: string) => void
   toggleHidden: (id: string) => void
   setObjectsLocked: (ids: string[], locked: boolean) => void
@@ -771,83 +862,39 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   updateObject: (id, patch) =>
     set((state) => {
-      const current = state.objects.find((o) => o.id === id)
-      if (!current) return {}
-      const before: Record<string, unknown> = {}
-      for (const key of Object.keys(patch) as (keyof SceneObject)[]) {
-        before[key] = current[key]
-      }
-
-      // Mirror a transform edit into whichever keyframe is actively being
-      // posed (single-object AnimationClip or Cutscene track), so "select a
-      // keyframe, then move the object with the viewport gizmo" actually
-      // captures the pose. Centralized here rather than at each UI call site
-      // — the gizmo/ScaleFaceHandles in SceneObjects.tsx only ever call
-      // updateObject, they have no notion of "which keyframe is active" —
-      // so this is the one place every transform edit, from any input
-      // method, necessarily passes through.
-      const transformPatch: Partial<Pick<SceneObject, 'position' | 'rotation' | 'scale'>> = {}
-      for (const key of ['position', 'rotation', 'scale'] as const) {
-        if (patch[key] !== undefined) transformPatch[key] = patch[key]
-      }
-      const hasTransformPatch = Object.keys(transformPatch).length > 0
-
-      let animations = state.animations
-      if (
-        hasTransformPatch &&
-        state.editingAnimationClipId &&
-        state.editingKeyframeId &&
-        state.editingAnimationClipId === current.animationId
-      ) {
-        const clipId = state.editingAnimationClipId
-        const keyframeId = state.editingKeyframeId
-        animations = state.animations.map((a) =>
-          a.id === clipId
-            ? {
-                ...a,
-                keyframes: a.keyframes.map((k) =>
-                  k.id === keyframeId ? { ...k, ...transformPatch } : k,
-                ),
-              }
-            : a,
-        )
-      }
-
-      let cutscenes = state.cutscenes
-      if (hasTransformPatch && state.editingCutsceneId && state.editingCutsceneKeyframeId) {
-        const cutsceneId = state.editingCutsceneId
-        const keyframeId = state.editingCutsceneKeyframeId
-        const track = state.cutscenes
-          .find((c) => c.id === cutsceneId)
-          ?.tracks.find((t) => t.objectId === id)
-        if (track?.keyframes.some((k) => k.id === keyframeId)) {
-          const trackId = track.id
-          cutscenes = state.cutscenes.map((c) =>
-            c.id === cutsceneId
-              ? {
-                  ...c,
-                  tracks: c.tracks.map((t) =>
-                    t.id === trackId
-                      ? {
-                          ...t,
-                          keyframes: t.keyframes.map((k) =>
-                            k.id === keyframeId ? { ...k, ...transformPatch } : k,
-                          ),
-                        }
-                      : t,
-                  ),
-                }
-              : c,
-          )
-        }
-      }
-
+      const result = computeObjectUpdate(state, state.objects, state.animations, state.cutscenes, id, patch)
+      if (!result) return {}
       return {
-        objects: state.objects.map((o) => (o.id === id ? { ...o, ...patch } : o)),
+        objects: result.objects,
+        animations: result.animations,
+        cutscenes: result.cutscenes,
+        isDirty: true,
+        undoStack: pushHistory(state.undoStack, result.entry),
+        redoStack: [],
+      }
+    }),
+
+  updateObjects: (updates) =>
+    set((state) => {
+      let objects = state.objects
+      let animations = state.animations
+      let cutscenes = state.cutscenes
+      const entries: SingleHistoryEntry[] = []
+      for (const { id, patch } of updates) {
+        const result = computeObjectUpdate(state, objects, animations, cutscenes, id, patch)
+        if (!result) continue
+        objects = result.objects
+        animations = result.animations
+        cutscenes = result.cutscenes
+        entries.push(result.entry)
+      }
+      if (entries.length === 0) return {}
+      return {
+        objects,
         animations,
         cutscenes,
         isDirty: true,
-        undoStack: pushHistory(state.undoStack, { type: 'update', id, before, after: patch }),
+        undoStack: pushHistory(state.undoStack, entries.length === 1 ? entries[0] : { type: 'batch', entries }),
         redoStack: [],
       }
     }),

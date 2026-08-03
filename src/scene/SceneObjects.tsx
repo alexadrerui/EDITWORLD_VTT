@@ -42,6 +42,7 @@ export function SceneObjects({ orbitControlsRef }: { orbitControlsRef: React.Ref
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
   const transformMode = useEditorStore((s) => s.transformMode)
   const updateObject = useEditorStore((s) => s.updateObject)
+  const updateObjects = useEditorStore((s) => s.updateObjects)
   const positionSnap = useEditorStore((s) => s.positionSnap)
   const rotationSnap = useEditorStore((s) => s.rotationSnap)
   const gizmoSpace = useEditorStore((s) => s.gizmoSpace)
@@ -88,6 +89,30 @@ export function SceneObjects({ orbitControlsRef }: { orbitControlsRef: React.Ref
       ? 'translate'
       : transformMode
 
+  // Move/rotate gizmo targets — one entry for a normal single selection,
+  // several under a multi-select. Locked objects (or objects in a locked
+  // group) are dropped entirely: same "don't show a gizmo you can't use"
+  // reasoning as selectedLocked above, generalized to "if ANY selected
+  // object is locked, show no gizmo at all" rather than partially applying
+  // it to only the unlocked ones (which would silently move only some of
+  // what the user thinks they selected).
+  const gizmoTargets = selectedIds
+    .map((id) => ({ mesh: meshRefs.current.get(id), object: objects.find((o) => o.id === id) }))
+    .filter(
+      (entry): entry is { mesh: Mesh; object: (typeof objects)[number] } =>
+        !!entry.mesh && !!entry.object,
+    )
+  const anyGizmoTargetLocked = gizmoTargets.some(
+    ({ object }) => object.locked || !!groups.find((g) => g.id === object.groupId)?.locked,
+  )
+  // Same light/sound fallback as effectiveTransformMode above, generalized
+  // with .some() across the whole selection instead of one object.
+  const gizmoEffectiveMode =
+    gizmoTargets.some(({ object }) => isLightKind(object.kind) || isSoundKind(object.kind)) &&
+    transformMode !== 'rotate'
+      ? 'translate'
+      : transformMode
+
   return (
     <>
       {objects.map((object) => (
@@ -128,19 +153,19 @@ export function SceneObjects({ orbitControlsRef }: { orbitControlsRef: React.Ref
         />
       )}
 
-      {selectedMesh &&
-        selectedObject &&
-        !selectedLocked &&
-        (effectiveTransformMode === 'translate' || effectiveTransformMode === 'rotate') && (
+      {gizmoTargets.length > 0 &&
+        !anyGizmoTargetLocked &&
+        (gizmoEffectiveMode === 'translate' || gizmoEffectiveMode === 'rotate') && (
           <CompactGizmo
-            mesh={selectedMesh}
-            object={selectedObject}
+            targets={gizmoTargets}
             objects={objects}
             meshRefs={meshRefs}
-            updateObject={updateObject}
+            updateObjects={updateObjects}
             orbitControlsRef={orbitControlsRef}
-            gizmoSpace={gizmoSpace}
-            positionSnap={selectedObject.snapToObjects ? null : positionSnap}
+            gizmoSpace={gizmoTargets.length > 1 ? 'world' : gizmoSpace}
+            positionSnap={
+              gizmoTargets.length === 1 && gizmoTargets[0].object.snapToObjects ? null : positionSnap
+            }
             rotationSnap={rotationSnap !== null ? (rotationSnap * Math.PI) / 180 : null}
           />
         )}
