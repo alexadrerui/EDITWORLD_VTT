@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Lightbulb, Plus, Redo2, Undo2 } from 'lucide-react'
+import { Camera, Lightbulb, Plus, Redo2, Undo2 } from 'lucide-react'
 import type { LightKind, PrimitiveKind } from '../types'
 import { useEditorStore } from '../state/useEditorStore'
 import { useDropdown } from './useDropdown'
@@ -112,12 +112,25 @@ function AddLightMenu() {
   )
 }
 
+// A single kind, unlike AddObjectMenu/AddLightMenu — no dropdown needed for
+// just "Câmera" (matches Spline's toolbar, where Câmera is its own flat
+// top-level entry rather than a dropdown with variants).
+function AddCameraButton() {
+  const addObject = useEditorStore((s) => s.addObject)
+  return (
+    <button onClick={() => addObject('camera')}>
+      <Camera size={14} /> Adicionar câmera
+    </button>
+  )
+}
+
 export function Toolbar() {
   return (
     <div className="toolbar">
       <div className="toolbar-group">
         <AddObjectMenu />
         <AddLightMenu />
+        <AddCameraButton />
       </div>
 
       <div className="toolbar-divider" />

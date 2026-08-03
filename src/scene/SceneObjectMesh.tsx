@@ -54,6 +54,7 @@ import { usePointerClick } from './usePointerClick'
 import {
   computeNormalBias,
   computeShadowRadius,
+  isCameraKind,
   isImportedModelKind,
   isLightKind,
   isSoundKind,
@@ -812,6 +813,46 @@ function SoundIcon({
   )
 }
 
+// A camera object has no geometry/material of its own — just a small
+// four-sided cone reading as a view frustum (the same recognizable gizmo
+// language as Blender's/three.js's own camera helpers), apex-ish end
+// pointing down local -Z to match three.js's own camera-forward convention
+// (a PerspectiveCamera looks down its own -Z axis). Unlike LightIcon's
+// octahedron, this needs its own local rotation independent of the outer
+// mesh's `rotation={object.rotation}` (the camera's actual aim), so it's a
+// nested mesh with its own transform instead of geometry attached straight
+// to the outer mesh.
+function CameraIcon({
+  object,
+  gizmosVisible,
+  onPointerDown,
+  onPointerUp,
+}: {
+  object: SceneObject
+  gizmosVisible: boolean
+  onPointerDown: (e: ThreeEvent<PointerEvent>) => void
+  onPointerUp: (e: ThreeEvent<PointerEvent>) => void
+}) {
+  const radius = PRIMITIVE_BASE_SIZE[object.kind][0] / 2
+  const gizmoColor = object.color
+
+  return (
+    <>
+      {gizmosVisible && (
+        <>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} raycast={() => null}>
+            <coneGeometry args={[radius, radius * 2, 4]} />
+            <meshBasicMaterial color={gizmoColor} wireframe />
+          </mesh>
+          <mesh visible={false} onPointerDown={onPointerDown} onPointerUp={onPointerUp}>
+            <sphereGeometry args={[radius * LIGHT_PICK_RADIUS_SCALE, 8, 6]} />
+          </mesh>
+        </>
+      )}
+    </>
+  )
+}
+
 // Placeholder shown while a model asset is loading, or in place of it
 // permanently if the referenced blob is missing from IndexedDB (deleted, or
 // browser data cleared — see assetStore.ts) — a dashed-looking wireframe box
@@ -928,6 +969,26 @@ export const SceneObjectMesh = forwardRef<Mesh, { object: SceneObject }>(
           onPointerUp={onPointerUp}
         >
           <LightIcon
+            object={object}
+            gizmosVisible={lightGizmosVisible}
+            onPointerDown={onPointerDown}
+            onPointerUp={onPointerUp}
+          />
+        </mesh>
+      )
+    }
+
+    if (isCameraKind(object.kind)) {
+      return (
+        <mesh
+          ref={setRefs}
+          name={object.id}
+          position={isPreviewing ? undefined : object.position}
+          rotation={isPreviewing ? undefined : object.rotation}
+          onPointerDown={onPointerDown}
+          onPointerUp={onPointerUp}
+        >
+          <CameraIcon
             object={object}
             gizmosVisible={lightGizmosVisible}
             onPointerDown={onPointerDown}

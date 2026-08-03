@@ -19,6 +19,16 @@ export type MeshKind =
 // which stays the scene's simple default lighting.
 export type LightKind = 'pointLight' | 'spotLight' | 'directionalLight'
 
+// A placeable, animatable viewpoint — no geometry, no material, just an icon
+// gizmo (a small frustum, see SceneObjectMesh.tsx's CameraIcon) at some
+// position/rotation. Exists so a cutscene/AnimationClip can choreograph a
+// camera move alongside the objects it's filming; it doesn't (yet) become
+// the actual render camera during playback — see CutsceneStudio.tsx/
+// AnimationPanel.tsx, both of which just animate position/rotation like any
+// other object today. Its own type instead of folding into LightKind since
+// it shares none of the light-only fields (intensity/shadow/etc.) below.
+export type CameraKind = 'camera'
+
 // Imported/asset-backed primitives — like lights, they share the same
 // SceneObject/objects[] array as meshes (grouping, undo/redo, persistence,
 // drag-and-drop, search all work for free), but have their own field subset:
@@ -28,7 +38,7 @@ export type LightKind = 'pointLight' | 'spotLight' | 'directionalLight'
 // colorMapAssetId/videoMapAssetId/sound* fields on SceneObject below.
 export type ImportedKind = 'importedModel' | 'soundSource'
 
-export type PrimitiveKind = MeshKind | LightKind | ImportedKind
+export type PrimitiveKind = MeshKind | LightKind | CameraKind | ImportedKind
 
 // Which faces render — mirrors THREE.FrontSide/BackSide/DoubleSide.
 export type MaterialSide = 'front' | 'back' | 'double'

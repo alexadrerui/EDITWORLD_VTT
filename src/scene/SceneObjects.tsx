@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { TransformControls } from '@react-three/drei/core/TransformControls'
 import type { Mesh } from 'three'
 import { useEditorStore } from '../state/useEditorStore'
-import { isLightKind, isSoundKind } from './primitives'
+import { isCameraKind, isLightKind, isSoundKind } from './primitives'
 import { CompactGizmo } from './CompactGizmo'
 import { ScaleFaceHandles } from './ScaleFaceHandles'
 import { SceneObjectMesh } from './SceneObjectMesh'
@@ -78,13 +78,15 @@ export function SceneObjects({ orbitControlsRef }: { orbitControlsRef: React.Ref
     !!selectedObject?.locked ||
     !!groups.find((g) => g.id === selectedObject?.groupId)?.locked
 
-  // Lights and sound sources have no meaningful "scale" in our data model —
-  // fall back to translate so selecting one while scale/scaleFree is still
-  // the active mode (carried over from a previously selected mesh) doesn't
-  // show a scale gizmo that would do nothing useful.
+  // Lights, sound sources and cameras have no meaningful "scale" in our data
+  // model — fall back to translate so selecting one while scale/scaleFree is
+  // still the active mode (carried over from a previously selected mesh)
+  // doesn't show a scale gizmo that would do nothing useful.
   const effectiveTransformMode =
     selectedObject &&
-    (isLightKind(selectedObject.kind) || isSoundKind(selectedObject.kind)) &&
+    (isLightKind(selectedObject.kind) ||
+      isSoundKind(selectedObject.kind) ||
+      isCameraKind(selectedObject.kind)) &&
     transformMode !== 'rotate'
       ? 'translate'
       : transformMode
@@ -105,11 +107,13 @@ export function SceneObjects({ orbitControlsRef }: { orbitControlsRef: React.Ref
   const anyGizmoTargetLocked = gizmoTargets.some(
     ({ object }) => object.locked || !!groups.find((g) => g.id === object.groupId)?.locked,
   )
-  // Same light/sound fallback as effectiveTransformMode above, generalized
-  // with .some() across the whole selection instead of one object.
+  // Same light/sound/camera fallback as effectiveTransformMode above,
+  // generalized with .some() across the whole selection instead of one object.
   const gizmoEffectiveMode =
-    gizmoTargets.some(({ object }) => isLightKind(object.kind) || isSoundKind(object.kind)) &&
-    transformMode !== 'rotate'
+    gizmoTargets.some(
+      ({ object }) =>
+        isLightKind(object.kind) || isSoundKind(object.kind) || isCameraKind(object.kind),
+    ) && transformMode !== 'rotate'
       ? 'translate'
       : transformMode
 

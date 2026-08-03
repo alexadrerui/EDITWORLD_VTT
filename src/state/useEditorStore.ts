@@ -351,18 +351,29 @@ const LIGHT_NAME: Record<LightKind, string> = {
   directionalLight: 'Luz direcional',
 }
 
+// Kept out of the generic `${kind[0].toUpperCase()}${kind.slice(1)}` fallback
+// below only because "Camera" needs the accent ("Câmera") that capitalizing
+// the raw kind string can't produce — same reason LIGHT_NAME exists.
+const CAMERA_NAME = 'Câmera'
+
 function createPrimitive(kind: PrimitiveKind, overrides?: Partial<SceneObject>): SceneObject {
   const n = nextObjectId++
   const light = isLightKind(kind)
   const isSound = kind === 'soundSource'
+  const isCamera = kind === 'camera'
   return {
     id: genId('obj'),
-    name: light ? `${LIGHT_NAME[kind]} ${n}` : `${kind[0].toUpperCase()}${kind.slice(1)} ${n}`,
+    name: light
+      ? `${LIGHT_NAME[kind]} ${n}`
+      : isCamera
+        ? `${CAMERA_NAME} ${n}`
+        : `${kind[0].toUpperCase()}${kind.slice(1)} ${n}`,
     kind,
     // Lights and sound sources spawn floating at head height like a hanging
-    // lamp; meshes (including imported models) sit on the ground (planes
-    // flush at y=0, everything else resting at 0.5).
-    position: [0, light || isSound ? 3 : kind === 'plane' ? 0 : 0.5, 0],
+    // lamp; a camera spawns at roughly eye level (an establishing-shot
+    // height) instead; meshes (including imported models) sit on the ground
+    // (planes flush at y=0, everything else resting at 0.5).
+    position: [0, isCamera ? 1.6 : light || isSound ? 3 : kind === 'plane' ? 0 : 0.5, 0],
     rotation: [0, 0, 0],
     scale: [1, 1, 1],
     color: light ? '#fff2cc' : '#8a8f98',

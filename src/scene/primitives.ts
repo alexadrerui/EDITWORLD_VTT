@@ -1,6 +1,7 @@
 import {
   Box,
   Boxes,
+  Camera,
   Circle,
   Cone,
   Cylinder,
@@ -16,7 +17,7 @@ import {
   Volume2,
   type LucideIcon,
 } from 'lucide-react'
-import type { ImportedKind, LightKind, PrimitiveKind, SceneObject, ShadowResolution } from '../types'
+import type { CameraKind, ImportedKind, LightKind, PrimitiveKind, SceneObject, ShadowResolution } from '../types'
 
 // Bounding-box size (width, height, depth) of each primitive's base geometry
 // at scale [1, 1, 1] — must match the geometry args in SceneObjectMesh.tsx's
@@ -48,6 +49,9 @@ export const PRIMITIVE_BASE_SIZE: Record<PrimitiveKind, [number, number, number]
   pointLight: [0.4, 0.4, 0.4],
   spotLight: [0.4, 0.4, 0.4],
   directionalLight: [0.4, 0.4, 0.4],
+  // Same small gizmo-icon size as the light kinds — a camera has no real
+  // geometry either, just the frustum icon (see SceneObjectMesh.tsx).
+  camera: [0.4, 0.4, 0.4],
   // Placeholder footprint before the real GLTF bounding box is known (see
   // useImportedModel in SceneObjectMesh.tsx) — [1,1,1] is a neutral "about
   // one meter" reference, same spirit as a mesh primitive's own base size.
@@ -71,6 +75,7 @@ export const PRIMITIVE_LABEL: Record<PrimitiveKind, string> = {
   pointLight: 'Luz de ponto',
   spotLight: 'Luz spot',
   directionalLight: 'Luz direcional',
+  camera: 'Câmera',
   importedModel: 'Modelo importado',
   soundSource: 'Fonte de som',
 }
@@ -91,6 +96,7 @@ export const PRIMITIVE_ICON: Record<PrimitiveKind, LucideIcon> = {
   pointLight: Lightbulb,
   spotLight: Spotlight,
   directionalLight: Sun,
+  camera: Camera,
   importedModel: Boxes,
   soundSource: Volume2,
 }
@@ -99,6 +105,10 @@ export const LIGHT_KINDS: LightKind[] = ['pointLight', 'spotLight', 'directional
 
 export function isLightKind(kind: PrimitiveKind): kind is LightKind {
   return kind === 'pointLight' || kind === 'spotLight' || kind === 'directionalLight'
+}
+
+export function isCameraKind(kind: PrimitiveKind): kind is CameraKind {
+  return kind === 'camera'
 }
 
 export function isImportedModelKind(kind: PrimitiveKind): kind is 'importedModel' {

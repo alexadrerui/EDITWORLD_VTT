@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { useEditorStore } from '../state/useEditorStore'
 import {
+  isCameraKind,
   isImportedModelKind,
   isLightKind,
   isSoundKind,
@@ -770,6 +771,76 @@ function SoundInspector({ object }: { object: SceneObject }) {
   )
 }
 
+// Cameras share the header/rename/delete chrome and Transformar (position +
+// rotation, no scale — a camera doesn't scale) with mesh objects, but have no
+// Material/Visibilidade/Arquivo sections at all — same "own body instead of
+// branching every section" reasoning as LightInspector/SoundInspector above.
+function CameraInspector({ object }: { object: SceneObject }) {
+  const updateObject = useEditorStore((s) => s.updateObject)
+  const removeObject = useEditorStore((s) => s.removeObject)
+  const transformMode = useEditorStore((s) => s.transformMode)
+  const setTransformMode = useEditorStore((s) => s.setTransformMode)
+  const requestCameraFocus = useEditorStore((s) => s.requestCameraFocus)
+
+  return (
+    <div className="floating-panel selection-panel">
+      <div className="selection-header">
+        <span className="selection-category">{PRIMITIVE_LABEL[object.kind].toUpperCase()}</span>
+        <input
+          className="selection-name"
+          type="text"
+          value={object.name}
+          onChange={(e) => updateObject(object.id, { name: e.target.value })}
+        />
+      </div>
+
+      <div className="selection-actions">
+        <button
+          className={transformMode === 'rotate' ? 'active' : ''}
+          onClick={() => setTransformMode(transformMode === 'rotate' ? 'translate' : 'rotate')}
+        >
+          <span className="action-label">
+            <RotateCw size={14} />
+            {transformMode === 'rotate' ? 'Desativar' : 'Ativar'} rotacionar
+          </span>
+          <span className="action-shortcut">R</span>
+        </button>
+        <button onClick={() => requestCameraFocus(object.id)}>
+          <span className="action-label">
+            <Focus size={14} />
+            Centralizar câmera
+          </span>
+          <span className="action-shortcut">.</span>
+        </button>
+        <button className="danger" onClick={() => removeObject(object.id)}>
+          <span className="action-label">
+            <Trash2 size={14} />
+            Excluir câmera
+          </span>
+          <span className="action-shortcut">Del</span>
+        </button>
+      </div>
+
+      <div className="field-section-label">Transformar</div>
+      <div className="selection-fields">
+        <Vector3Row
+          label="Posição"
+          value={object.position}
+          onChange={(position) => updateObject(object.id, { position })}
+        />
+        <Vector3Row
+          label="Rotação"
+          value={object.rotation}
+          onChange={(rotation) => updateObject(object.id, { rotation })}
+          step={0.05}
+        />
+      </div>
+
+      <AnimationSection object={object} />
+    </div>
+  )
+}
+
 export function Inspector() {
   const objects = useEditorStore((s) => s.objects)
   const selectedIds = useEditorStore((s) => s.selectedIds)
@@ -823,15 +894,15 @@ export function Inspector() {
           setTransformMode(transformMode === 'rotate' ? 'translate' : 'rotate')
           break
         case 's':
-          // Scale is meaningless for lights/sound sources (see
+          // Scale is meaningless for lights/sound sources/cameras (see
           // SceneObjects.tsx's effectiveTransformMode) — don't even flip the
           // global mode.
-          if (!isLightKind(object.kind) && !isSoundKind(object.kind)) {
+          if (!isLightKind(object.kind) && !isSoundKind(object.kind) && !isCameraKind(object.kind)) {
             setTransformMode(transformMode === 'scale' ? 'translate' : 'scale')
           }
           break
         case 'f':
-          if (!isLightKind(object.kind) && !isSoundKind(object.kind)) {
+          if (!isLightKind(object.kind) && !isSoundKind(object.kind) && !isCameraKind(object.kind)) {
             setTransformMode(transformMode === 'scaleFree' ? 'translate' : 'scaleFree')
           }
           break
@@ -887,6 +958,14 @@ export function Inspector() {
     return (
       <>
         {inspectorVisible && <SoundInspector object={object} />}
+        {collapseToggle}
+      </>
+    )
+  }
+  if (isCameraKind(object.kind)) {
+    return (
+      <>
+        {inspectorVisible && <CameraInspector object={object} />}
         {collapseToggle}
       </>
     )
