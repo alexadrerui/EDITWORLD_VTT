@@ -4,6 +4,7 @@ import type { Mesh } from 'three'
 import { useEditorStore } from '../state/useEditorStore'
 import { isCameraKind, isLightKind, isSoundKind } from './primitives'
 import { CompactGizmo } from './CompactGizmo'
+import { ImportedModelInstances } from './InstancedModels'
 import { ScaleFaceHandles } from './ScaleFaceHandles'
 import { SceneObjectMesh } from './SceneObjectMesh'
 import { SelectionOutline } from './SelectionOutline'
@@ -122,6 +123,8 @@ export function SceneObjects({ orbitControlsRef }: { orbitControlsRef: React.Ref
       {objects.map((object) => (
         <SceneObjectMesh key={object.id} object={object} ref={getRefCallback(object.id)} />
       ))}
+
+      <ImportedModelInstances objects={objects} meshRefs={meshRefs} />
 
       {selectedIds.map((id) => {
         const mesh = meshRefs.current.get(id)

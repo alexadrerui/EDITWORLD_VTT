@@ -5,7 +5,17 @@
 // reference it — each React hook below just asks the cache for its
 // per-assetId promise and (for models) clones the shared template.
 import { useEffect, useState } from 'react'
-import { Group, type Material, type Mesh, type Object3D, SRGBColorSpace, Texture, VideoTexture } from 'three'
+import {
+  type BufferGeometry,
+  Group,
+  type Material,
+  Matrix4,
+  type Mesh,
+  type Object3D,
+  SRGBColorSpace,
+  Texture,
+  VideoTexture,
+} from 'three'
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { getAssetBlob } from '../state/assetStore'
@@ -183,6 +193,97 @@ export function useImportedModel(assetId: string | undefined): ImportedModelStat
       .catch(() => {
         if (cancelled) return
         setState({ status: 'error', model: null, textures: [] })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [assetId])
+
+  return state
+}
+
+// One draw call per placed copy (via the clone above) is fine for a handful
+// of objects, but a scene with many copies of the same asset (a forest, a
+// dungeon's repeated wall tiles) pays for it in draw calls that don't need
+// to exist — geometry/material are already shared by reference, only the
+// per-copy transform differs. InstancedModels.tsx batches those into one
+// THREE.InstancedMesh per sub-mesh instead. This is the "is assetId eligible
+// for that, and what are its sub-meshes' geometry/material/local-transform"
+// half of that; InstancedModels.tsx owns the per-frame instance-matrix side.
+export interface SubMeshDescriptor {
+  geometry: BufferGeometry
+  material: Material
+  // Sub-mesh's transform relative to the template root — a GLB's meshes
+  // (e.g. a tree's trunk + leaves) usually aren't all at the origin, so this
+  // has to be folded into each instance's matrix alongside the placed
+  // object's own position/rotation/scale, not assumed to be identity.
+  localMatrix: Matrix4
+}
+
+// Memoized per assetId (not per call) since extraction only needs to happen
+// once no matter how many placed objects or how many times a component
+// re-renders — same one-fetch-per-assetId spirit as modelCache/textureCache
+// above. `undefined` = not computed yet, `null` = computed and NOT eligible
+// (multi-material, skinned, or morph-targeted sub-mesh found — batching one
+// InstancedMesh can't vary bone poses or per-instance material arrays per
+// copy, so those fall back to the existing clone-per-instance path instead
+// of silently rendering wrong).
+const instancableSubMeshesCache = new Map<string, SubMeshDescriptor[] | null>()
+
+function extractInstancableSubMeshes(template: Group): SubMeshDescriptor[] | null {
+  template.updateMatrixWorld(true)
+  const result: SubMeshDescriptor[] = []
+  let unsupported = false
+  template.traverse((node) => {
+    const mesh = node as Mesh
+    if (!('isMesh' in node) || !node.isMesh) return
+    const skinned = 'isSkinnedMesh' in mesh && (mesh as unknown as { isSkinnedMesh: boolean }).isSkinnedMesh
+    const morphed = (mesh.morphTargetInfluences?.length ?? 0) > 0
+    if (Array.isArray(mesh.material) || skinned || morphed) {
+      unsupported = true
+      return
+    }
+    result.push({ geometry: mesh.geometry, material: mesh.material, localMatrix: mesh.matrixWorld.clone() })
+  })
+  return unsupported || result.length === 0 ? null : result
+}
+
+interface ModelInstancingState {
+  status: AssetLoadStatus
+  subMeshes: SubMeshDescriptor[] | null
+}
+
+const INSTANCING_IDLE: ModelInstancingState = { status: 'idle', subMeshes: null }
+
+// Resolves whether `assetId` can be rendered as instances, and if so its
+// per-sub-mesh geometry/material/local-transform — consumed both by
+// SceneObjectMesh (to know whether to render its own copy of the geometry,
+// or leave that to the shared batch and stay an invisible pick/outline/
+// gizmo proxy — see ImportedModelContent) and by InstancedModels.tsx (to
+// actually build the batch). Same cache underneath either way, so asking
+// twice costs nothing extra.
+export function useModelInstancing(assetId: string | undefined): ModelInstancingState {
+  const [state, setState] = useState<ModelInstancingState>(INSTANCING_IDLE)
+
+  useEffect(() => {
+    if (!assetId) {
+      setState(INSTANCING_IDLE)
+      return
+    }
+    let cancelled = false
+    setState({ status: 'loading', subMeshes: null })
+    loadModelTemplate(assetId)
+      .then(({ scene }) => {
+        if (cancelled) return
+        let subMeshes = instancableSubMeshesCache.get(assetId)
+        if (subMeshes === undefined) {
+          subMeshes = extractInstancableSubMeshes(scene)
+          instancableSubMeshesCache.set(assetId, subMeshes)
+        }
+        setState({ status: 'ready', subMeshes })
+      })
+      .catch(() => {
+        if (!cancelled) setState({ status: 'error', subMeshes: null })
       })
     return () => {
       cancelled = true

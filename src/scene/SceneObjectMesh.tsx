@@ -61,7 +61,13 @@ import {
   PRIMITIVE_BASE_SIZE,
   SHADOW_MAP_SIZE,
 } from './primitives'
-import { useAudioBuffer, useImageTexture, useImportedModel, useVideoTexture } from './assetLoaders'
+import {
+  useAudioBuffer,
+  useImageTexture,
+  useImportedModel,
+  useModelInstancing,
+  useVideoTexture,
+} from './assetLoaders'
 import { globalAudioListener } from './audioListener'
 import { useAnimationPreview } from '../animation/animationEngine'
 import { registerMesh, unregisterMesh } from '../animation/meshRegistry'
@@ -864,9 +870,27 @@ const MISSING_ASSET_COLOR = '#e2a83a'
 const LOADING_PLACEHOLDER_COLOR = '#565b66'
 
 function ImportedModelContent({ object }: { object: SceneObject }) {
+  // Eligible assets (no skinning/morph targets/multi-material — see
+  // useModelInstancing) are drawn by the shared InstancedModels.tsx batch
+  // instead of this per-object copy, to cut draw calls when the same asset
+  // is placed many times. The clone below still mounts either way — when
+  // instanced, it's just kept invisible (`visible={!instanced}`) rather than
+  // replaced with a cheaper stand-in: three.js raycasting ignores `visible`
+  // (only rendering respects it, same as every other invisible pick proxy in
+  // this file — see LightIcon/SoundIcon below), so this keeps real
+  // per-triangle picking, the selection outline's box and the gizmo working
+  // off the model's actual shape instead of a guessed placeholder size —
+  // tried a fixed 1x1x1 invisible box first and it silently mis-picked on
+  // this asset (a multi-meter-wide sofa), since PRIMITIVE_BASE_SIZE's [1,1,1]
+  // for 'importedModel' was only ever a rough stand-in for the outline, not
+  // a real bound to hit-test against.
+  const { status: instancingStatus, subMeshes } = useModelInstancing(object.assetId)
+  const instanced = instancingStatus === 'ready' && !!subMeshes
+
   const { status, model } = useImportedModel(object.assetId)
+
   if (status === 'ready' && model) {
-    return <primitive object={model} />
+    return <primitive object={model} visible={!instanced} />
   }
   return (
     <mesh>
