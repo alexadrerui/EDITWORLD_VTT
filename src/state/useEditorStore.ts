@@ -57,7 +57,19 @@ const DEFAULT_SCENE_SETTINGS: SceneSettings = {
 
 const INDEX_KEY = 'editworld-vtt:scenes'
 const CURRENT_KEY = 'editworld-vtt:current-scene'
-const sceneDataKey = (id: string) => `editworld-vtt:scene:${id}`
+const SCENE_DATA_KEY_PREFIX = 'editworld-vtt:scene:'
+const sceneDataKey = (id: string) => `${SCENE_DATA_KEY_PREFIX}${id}`
+
+// Removes every per-scene data entry from localStorage, regardless of which
+// scenes are currently in the index — used by projectFile.ts when importing
+// a project file wholesale, so scenes from whatever campaign was previously
+// loaded in this browser don't linger as orphaned keys once
+// saveScenesIndex/saveSceneData below write the imported campaign's own set.
+export function clearAllSceneData(): void {
+  for (const key of Object.keys(localStorage)) {
+    if (key.startsWith(SCENE_DATA_KEY_PREFIX)) localStorage.removeItem(key)
+  }
+}
 
 function genId(prefix: string): string {
   const unique =
@@ -67,7 +79,7 @@ function genId(prefix: string): string {
   return `${prefix}-${unique}`
 }
 
-function loadScenesIndex(): SceneMeta[] {
+export function loadScenesIndex(): SceneMeta[] {
   try {
     const raw = localStorage.getItem(INDEX_KEY)
     const parsed = raw ? (JSON.parse(raw) as SceneMeta[]) : []
@@ -80,7 +92,7 @@ function loadScenesIndex(): SceneMeta[] {
   return fallback
 }
 
-function saveScenesIndex(index: SceneMeta[]) {
+export function saveScenesIndex(index: SceneMeta[]) {
   localStorage.setItem(INDEX_KEY, JSON.stringify(index))
 }
 
@@ -89,11 +101,11 @@ function saveScenesIndex(index: SceneMeta[]) {
 // per-scene versioning" shape as CURRENT_KEY above.
 const CAMPAIGN_NAME_KEY = 'editworld-vtt:campaign-name'
 
-function loadCampaignName(): string {
+export function loadCampaignName(): string {
   return localStorage.getItem(CAMPAIGN_NAME_KEY) || 'Minha Campanha'
 }
 
-function saveCampaignName(name: string) {
+export function saveCampaignName(name: string) {
   localStorage.setItem(CAMPAIGN_NAME_KEY, name)
 }
 
@@ -103,7 +115,7 @@ function saveCampaignName(name: string) {
 // "Salvar".
 const CUSTOM_ASSETS_KEY = 'editworld-vtt:custom-assets'
 
-function loadCustomAssets(): CustomAsset[] {
+export function loadCustomAssets(): CustomAsset[] {
   try {
     const raw = localStorage.getItem(CUSTOM_ASSETS_KEY)
     return raw ? (JSON.parse(raw) as CustomAsset[]) : []
@@ -112,7 +124,7 @@ function loadCustomAssets(): CustomAsset[] {
   }
 }
 
-function saveCustomAssets(assets: CustomAsset[]) {
+export function saveCustomAssets(assets: CustomAsset[]) {
   localStorage.setItem(CUSTOM_ASSETS_KEY, JSON.stringify(assets))
 }
 
@@ -123,7 +135,7 @@ function saveCustomAssets(assets: CustomAsset[]) {
 // members list here, same shape as SceneGroup/SceneObject.groupId.
 const ASSET_FOLDERS_KEY = 'editworld-vtt:asset-folders'
 
-function loadAssetFolders(): AssetFolder[] {
+export function loadAssetFolders(): AssetFolder[] {
   try {
     const raw = localStorage.getItem(ASSET_FOLDERS_KEY)
     return raw ? (JSON.parse(raw) as AssetFolder[]) : []
@@ -132,11 +144,11 @@ function loadAssetFolders(): AssetFolder[] {
   }
 }
 
-function saveAssetFolders(folders: AssetFolder[]) {
+export function saveAssetFolders(folders: AssetFolder[]) {
   localStorage.setItem(ASSET_FOLDERS_KEY, JSON.stringify(folders))
 }
 
-interface SceneData {
+export interface SceneData {
   objects: SceneObject[]
   groups: SceneGroup[]
   settings: SceneSettings
@@ -144,7 +156,7 @@ interface SceneData {
   cutscenes: Cutscene[]
 }
 
-function loadSceneData(id: string): SceneData {
+export function loadSceneData(id: string): SceneData {
   const empty = {
     objects: [],
     groups: [],
@@ -205,7 +217,7 @@ function loadSceneData(id: string): SceneData {
   }
 }
 
-function saveSceneData(id: string, data: SceneData) {
+export function saveSceneData(id: string, data: SceneData) {
   localStorage.setItem(sceneDataKey(id), JSON.stringify(data))
 }
 

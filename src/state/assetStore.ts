@@ -95,3 +95,34 @@ export async function moveAsset(id: string, folderId: string | null): Promise<vo
   if (!record) return
   await withStore('readwrite', (store) => store.put({ ...record, folderId }))
 }
+
+// Wipes every stored blob — used by projectFile.ts when importing a project
+// file wholesale (replaces the browser's asset library instead of merging
+// into it, same "opening a project file" semantics as clearAllSceneData in
+// useEditorStore.ts).
+export async function clearAllAssets(): Promise<void> {
+  const db = await openDb()
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite')
+    tx.objectStore(STORE_NAME).clear()
+    tx.oncomplete = () => resolve()
+    tx.onerror = () => reject(tx.error)
+  })
+}
+
+// Upserts a record under `meta.id` exactly as given, unlike saveAsset (which
+// always mints a fresh id) — needed on import so every SceneObject.assetId/
+// colorMapAssetId/etc. reference in the imported scenes still resolves to
+// the asset it pointed at when exported.
+export async function putAssetRecord(meta: AssetMeta, blob: Blob): Promise<void> {
+  const record: AssetRecord = {
+    id: meta.id,
+    name: meta.name,
+    kind: meta.kind,
+    mimeType: meta.mimeType,
+    folderId: meta.folderId ?? null,
+    blob,
+    createdAt: Date.now(),
+  }
+  await withStore('readwrite', (store) => store.put(record))
+}

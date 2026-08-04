@@ -1,4 +1,4 @@
-import { Fragment, useState, type MouseEvent } from 'react'
+import { Fragment, useRef, useState, type ChangeEvent, type MouseEvent } from 'react'
 import {
   ArrowLeft,
   Check,
@@ -8,6 +8,8 @@ import {
   Download,
   Eye,
   EyeOff,
+  FileDown,
+  FileUp,
   FolderPlus,
   Group as GroupIcon,
   HelpCircle,
@@ -23,6 +25,7 @@ import {
 import { useEditorStore } from '../state/useEditorStore'
 import { PRIMITIVE_ICON as KIND_ICON } from '../scene/primitives'
 import type { SceneObject } from '../types'
+import { exportProjectFile, importProjectFile } from '../state/projectFile'
 import { ConfirmDialog } from './ConfirmDialog'
 import { ImportModal } from './ImportModal'
 import { AssetStoreModal } from './AssetStoreModal'
@@ -311,9 +314,15 @@ function PanelTabs({
 function HierarchyFooter({
   onOpenAssetStore,
   onOpenImport,
+  onExportProject,
+  onImportProject,
+  exportingProject,
 }: {
   onOpenAssetStore: () => void
   onOpenImport: () => void
+  onExportProject: () => void
+  onImportProject: () => void
+  exportingProject: boolean
 }) {
   return (
     <div className="hierarchy-footer">
@@ -324,6 +333,21 @@ function HierarchyFooter({
       <button title="Importar" onClick={onOpenImport}>
         <Download size={14} />
         Import
+      </button>
+      <button
+        title="Baixar a campanha inteira (cenas + assets) como um arquivo .json"
+        onClick={onExportProject}
+        disabled={exportingProject}
+      >
+        <FileDown size={14} />
+        {exportingProject ? 'Exportando…' : 'Exportar projeto'}
+      </button>
+      <button
+        title="Substituir a campanha atual pelo conteúdo de um arquivo .json de projeto"
+        onClick={onImportProject}
+      >
+        <FileUp size={14} />
+        Importar projeto
       </button>
       <button title="Ajuda e feedback (em breve)">
         <HelpCircle size={14} />
@@ -358,6 +382,39 @@ export function Hierarchy() {
   const [panelTab, setPanelTab] = useState<'objects' | 'assets'>('objects')
   const [importModalOpen, setImportModalOpen] = useState(false)
   const [assetStoreModalOpen, setAssetStoreModalOpen] = useState(false)
+  const [exportingProject, setExportingProject] = useState(false)
+  const [pendingProjectImport, setPendingProjectImport] = useState<File | null>(null)
+  const projectFileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleExportProject = async () => {
+    setExportingProject(true)
+    try {
+      await exportProjectFile()
+    } finally {
+      setExportingProject(false)
+    }
+  }
+
+  const handleProjectFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (file) setPendingProjectImport(file)
+  }
+
+  // Reloads on success — every piece of live state (Zustand store, undo
+  // stacks, current scene/selection, open panels) is derived from
+  // localStorage/IndexedDB at store-creation time, so a full reload is the
+  // simplest way to make the freshly-imported campaign the live one instead
+  // of manually resetting each piece by hand — same "opening a project file"
+  // reload any native editor would do.
+  const confirmProjectImport = async () => {
+    const file = pendingProjectImport
+    setPendingProjectImport(null)
+    if (!file) return
+    const result = await importProjectFile(file)
+    if (result.ok) window.location.reload()
+    else window.alert(result.error)
+  }
 
   const startRename = (id: string, currentName: string) => {
     setEditingId(id)
@@ -554,6 +611,9 @@ export function Hierarchy() {
           <HierarchyFooter
             onOpenAssetStore={() => setAssetStoreModalOpen(true)}
             onOpenImport={() => setImportModalOpen(true)}
+            onExportProject={handleExportProject}
+            onImportProject={() => projectFileInputRef.current?.click()}
+            exportingProject={exportingProject}
           />
         </div>
       )}
@@ -565,8 +625,24 @@ export function Hierarchy() {
         {hierarchyVisible ? <ChevronLeft size={13} /> : <ChevronRight size={13} />}
       </button>
 
+      <input
+        ref={projectFileInputRef}
+        type="file"
+        accept=".json,application/json"
+        className="asset-file-input"
+        onChange={handleProjectFileChange}
+      />
+
       {importModalOpen && <ImportModal onClose={() => setImportModalOpen(false)} />}
       {assetStoreModalOpen && <AssetStoreModal onClose={() => setAssetStoreModalOpen(false)} />}
+      {pendingProjectImport && (
+        <ConfirmDialog
+          message={`Importar "${pendingProjectImport.name}" substituirá TODAS as cenas, pastas de assets e assets binários da campanha atual neste navegador. Essa ação não pode ser desfeita.`}
+          confirmLabel="Substituir e importar"
+          onCancel={() => setPendingProjectImport(null)}
+          onConfirm={confirmProjectImport}
+        />
+      )}
     </>
   )
 }
