@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useMemo, useRef } from 'react'
+import { forwardRef, memo, useCallback, useEffect, useMemo, useRef } from 'react'
 import type { ThreeEvent } from '@react-three/fiber'
 import {
   AdditiveBlending,
@@ -903,8 +903,14 @@ function ImportedModelContent({ object }: { object: SceneObject }) {
   )
 }
 
-export const SceneObjectMesh = forwardRef<Mesh, { object: SceneObject }>(
-  function SceneObjectMesh({ object }, ref) {
+// Memoized: SceneObjects.tsx renders one of these per scene object every
+// time the store's `objects` array changes, and useEditorStore's
+// updateObject/updateObjects preserve referential identity for every object
+// that wasn't touched by the patch — so without this, editing one object
+// still re-invokes every other object's render function on each keystroke/
+// drag frame for no reason.
+export const SceneObjectMesh = memo(
+  forwardRef<Mesh, { object: SceneObject }>(function SceneObjectMesh({ object }, ref) {
     const select = useEditorStore((s) => s.select)
     const toggleSelect = useEditorStore((s) => s.toggleSelect)
     const isSelected = useEditorStore((s) => s.selectedIds.includes(object.id))
@@ -1061,5 +1067,5 @@ export const SceneObjectMesh = forwardRef<Mesh, { object: SceneObject }>(
         <Material object={object} />
       </mesh>
     )
-  },
+  }),
 )
