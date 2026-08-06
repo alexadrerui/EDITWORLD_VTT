@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import { useEditorStore } from '../state/useEditorStore'
 import { SegmentedControl, SliderField } from './Inspector'
+import { SelectionPanel } from './SelectionPanel'
 import type { GridStyle } from '../types'
 
 const CSM_OPTIONS = [
@@ -36,7 +37,7 @@ export function SceneInspector() {
   }
 
   return (
-    <div className="floating-panel selection-panel">
+    <SelectionPanel>
       <div className="selection-header">
         <span className="selection-category">CENA</span>
         <span className="scene-inspector-name">{currentScene?.name}</span>
@@ -195,6 +196,6 @@ export function SceneInspector() {
           </button>
         </div>
       </div>
-    </div>
+    </SelectionPanel>
   )
 }

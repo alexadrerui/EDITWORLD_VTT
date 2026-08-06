@@ -41,16 +41,30 @@ export function ItemContextMenu({
 
   return createPortal(
     <div ref={rootRef} className="context-menu" style={{ left: menu.pos.x, top: menu.pos.y }}>
-      <button
-        className="context-menu-danger"
-        onClick={() => {
-          menu.onDelete()
-          close()
-        }}
-      >
-        <Trash2 size={14} />
-        {label}
-      </button>
+      {menu.extraActions?.map((action) => (
+        <button
+          key={action.label}
+          onClick={() => {
+            action.onClick()
+            close()
+          }}
+        >
+          <action.icon size={14} />
+          {action.label}
+        </button>
+      ))}
+      {menu.onDelete && (
+        <button
+          className="context-menu-danger"
+          onClick={() => {
+            menu.onDelete!()
+            close()
+          }}
+        >
+          <Trash2 size={14} />
+          {label}
+        </button>
+      )}
     </div>,
     document.body,
   )

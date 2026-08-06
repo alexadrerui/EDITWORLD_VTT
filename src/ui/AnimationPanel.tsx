@@ -34,13 +34,15 @@ export function AnimationPanel() {
   const setAnimationScrubTime = useEditorStore((s) => s.setAnimationScrubTime)
   const closeAnimationPanel = useEditorStore((s) => s.closeAnimationPanel)
 
+  const inspectorWidth = useEditorStore((s) => s.panelLayout.inspectorWidth)
+
   if (!clip) return null
 
   const duration = clip.keyframes.reduce((max, k) => Math.max(max, k.time), 0)
   const isTesting = testingAnimationId === clip.id
 
   return (
-    <div className="floating-panel animation-panel">
+    <div className="floating-panel animation-panel" style={{ right: inspectorWidth + 24 }}>
       <div className="selection-header">
         <span className="selection-category">Animação</span>
         <input

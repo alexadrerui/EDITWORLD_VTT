@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { Eye, EyeOff, FolderPlus, Lock, Trash2, Unlock } from 'lucide-react'
 import { useEditorStore } from '../state/useEditorStore'
+import { SelectionPanel } from './SelectionPanel'
 
 // Bulk-action panel for 2+ objects selected at once (see SceneObjects.tsx/
 // Hierarchy.tsx for how Shift/Ctrl-click builds up selectedIds). Deliberately
@@ -31,7 +32,7 @@ export function MultiSelectionInspector({ selectedIds }: { selectedIds: string[]
   }, [selectedIds, removeObjects])
 
   return (
-    <div className="floating-panel selection-panel">
+    <SelectionPanel>
       <div className="selection-header">
         <span className="selection-category">SELEÇÃO</span>
         <span className="selection-dimensions">{selectedIds.length} objetos selecionados</span>
@@ -80,6 +81,6 @@ export function MultiSelectionInspector({ selectedIds }: { selectedIds: string[]
           <span className="action-shortcut">Del</span>
         </button>
       </div>
-    </div>
+    </SelectionPanel>
   )
 }

@@ -29,6 +29,7 @@ import {
 } from '../scene/primitives'
 import { MultiSelectionInspector } from './MultiSelectionInspector'
 import { SceneInspector } from './SceneInspector'
+import { SelectionPanel } from './SelectionPanel'
 import { useDropdown } from './useDropdown'
 import { rejectIfNotGlb, useImportedModel } from '../scene/assetLoaders'
 import type {
@@ -302,7 +303,7 @@ function LightInspector({ object }: { object: SceneObject }) {
   const hasFalloff = !isDirectional
 
   return (
-    <div className="floating-panel selection-panel">
+    <SelectionPanel>
       <div className="selection-header">
         <span className="selection-category">{PRIMITIVE_LABEL[object.kind].toUpperCase()}</span>
         <input
@@ -489,7 +490,7 @@ function LightInspector({ object }: { object: SceneObject }) {
           </div>
         )}
       </div>
-    </div>
+    </SelectionPanel>
   )
 }
 
@@ -521,7 +522,7 @@ function ImportedModelInspector({ object }: { object: SceneObject }) {
   }
 
   return (
-    <div className="floating-panel selection-panel">
+    <SelectionPanel>
       <input
         ref={fileInputRef}
         type="file"
@@ -640,7 +641,7 @@ function ImportedModelInspector({ object }: { object: SceneObject }) {
           ))}
         </div>
       )}
-    </div>
+    </SelectionPanel>
   )
 }
 
@@ -665,7 +666,7 @@ function SoundInspector({ object }: { object: SceneObject }) {
   }
 
   return (
-    <div className="floating-panel selection-panel">
+    <SelectionPanel>
       <input
         ref={fileInputRef}
         type="file"
@@ -767,7 +768,7 @@ function SoundInspector({ object }: { object: SceneObject }) {
           </div>
         </div>
       </div>
-    </div>
+    </SelectionPanel>
   )
 }
 
@@ -783,7 +784,7 @@ function CameraInspector({ object }: { object: SceneObject }) {
   const requestCameraFocus = useEditorStore((s) => s.requestCameraFocus)
 
   return (
-    <div className="floating-panel selection-panel">
+    <SelectionPanel>
       <div className="selection-header">
         <span className="selection-category">{PRIMITIVE_LABEL[object.kind].toUpperCase()}</span>
         <input
@@ -837,7 +838,7 @@ function CameraInspector({ object }: { object: SceneObject }) {
       </div>
 
       <AnimationSection object={object} />
-    </div>
+    </SelectionPanel>
   )
 }
 
@@ -852,6 +853,7 @@ export function Inspector() {
   const requestCameraFocus = useEditorStore((s) => s.requestCameraFocus)
   const inspectorVisible = useEditorStore((s) => s.inspectorVisible)
   const toggleInspectorVisible = useEditorStore((s) => s.toggleInspectorVisible)
+  const inspectorWidth = useEditorStore((s) => s.panelLayout.inspectorWidth)
   const assets = useEditorStore((s) => s.assets)
   const importTexture = useEditorStore((s) => s.importTexture)
   const importVideo = useEditorStore((s) => s.importVideo)
@@ -862,6 +864,7 @@ export function Inspector() {
   const collapseToggle = (
     <button
       className={`panel-collapse-toggle panel-collapse-toggle--right ${inspectorVisible ? 'is-open' : ''}`}
+      style={{ right: inspectorVisible ? inspectorWidth + 20 : undefined }}
       onClick={() => toggleInspectorVisible()}
       title={inspectorVisible ? 'Esconder painel' : 'Mostrar painel'}
     >
@@ -1022,7 +1025,7 @@ export function Inspector() {
   return (
     <>
       {inspectorVisible && (
-        <div className="floating-panel selection-panel">
+        <SelectionPanel>
       <div className="selection-header">
         <span className="selection-category">{PRIMITIVE_LABEL[object.kind].toUpperCase()}</span>
         <input
@@ -1357,11 +1360,11 @@ export function Inspector() {
           />
         </div>
       </div>
-        </div>
+        </SelectionPanel>
       )}
 
       {inspectorVisible && editPivotOpen && (
-        <div className="edit-pivot-panel">
+        <div className="edit-pivot-panel" style={{ right: inspectorWidth + 24 }}>
           <div className="edit-pivot-panel-header">
             <h4>Editar pivô</h4>
             <button onClick={() => setEditPivotOpen(false)} title="Fechar">

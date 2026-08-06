@@ -105,6 +105,44 @@ export async function exportProjectFile(): Promise<void> {
   URL.revokeObjectURL(url)
 }
 
+// Bump independently of PROJECT_FORMAT_VERSION above — this is a much
+// lighter, single-scene sibling of exportProjectFile, not read by
+// importProjectFile (different shape entirely, no import counterpart yet).
+const SCENE_FORMAT_VERSION = 1
+
+interface SceneFile {
+  formatVersion: number
+  exportedAt: string
+  scene: { meta: SceneMeta; data: SceneData }
+}
+
+// Downloads just one scene's own data (objects/groups/settings/animations/
+// cutscenes) as a .json — deliberately lighter than exportProjectFile: no
+// asset blobs embedded, so it's instant and small, but assetId references
+// (imported models/textures/audio) will dangle if opened in a browser that
+// doesn't already have those assets. Reached from the scene list's
+// right-click menu in Hierarchy.tsx, not the Hierarchy footer's whole-
+// campaign export/import buttons above.
+export function exportSceneFile(meta: SceneMeta): void {
+  const data = loadSceneData(meta.id)
+  const file: SceneFile = {
+    formatVersion: SCENE_FORMAT_VERSION,
+    exportedAt: new Date().toISOString(),
+    scene: { meta, data },
+  }
+
+  const json = JSON.stringify(file)
+  const blob = new Blob([json], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${sanitizeFileName(meta.name)}.json`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
 function isProjectFile(value: unknown): value is ProjectFile {
   if (!value || typeof value !== 'object') return false
   const v = value as Partial<ProjectFile>

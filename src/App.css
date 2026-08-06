@@ -173,6 +173,35 @@
   color: #8a8f98;
 }
 
+/* Drag strip for resizable panels (Hierarchy/selection-panel/asset-browser).
+   Positioned absolutely within its parent (every host panel is itself
+   `position: absolute`, so it's already the containing block — no extra
+   `position: relative` needed on the host). A few px wider than visible via
+   negative offset (set per-host below) so it's easy to grab right at the
+   panel edge without needing pixel-perfect aim. */
+.resize-handle {
+  position: absolute;
+  z-index: 2;
+}
+
+.resize-handle--vertical {
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: ew-resize;
+}
+
+.resize-handle--horizontal {
+  left: 0;
+  right: 0;
+  height: 8px;
+  cursor: ns-resize;
+}
+
+.resize-handle:hover {
+  background: rgba(58, 109, 240, 0.35);
+}
+
 /* Bottom floating pill bar for global snap settings (Loftcraft-style) —
    centered under the viewport, dropdowns open upward since it sits at the
    bottom edge. */
@@ -331,6 +360,10 @@
   transform: translateX(-50%);
   display: flex;
   width: min(720px, calc(100% - 40px));
+  /* Pre-hydration fallback — AssetBrowser.tsx sets height inline from the
+     persisted/resizable panelLayout.assetBrowserHeight, which overrides it.
+     The panel grows upward from its fixed `bottom: 104px`, so a taller
+     height never needs .asset-browser-toggle's own position to change. */
   height: 260px;
   background: rgba(26, 29, 34, 0.92);
   backdrop-filter: blur(6px);
@@ -338,6 +371,13 @@
   border-radius: 10px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   overflow: hidden;
+}
+
+/* `top: 0` (not a negative offset) — .asset-browser has `overflow: hidden`,
+   which would clip a handle positioned outside its box entirely, including
+   from pointer hit-testing, not just painting. */
+.asset-browser .resize-handle {
+  top: 0;
 }
 
 .asset-browser-sidebar {
@@ -467,9 +507,10 @@ button.asset-tile.active {
    closed. Same rounded-pill look as .asset-browser-toggle (not flush/
    half-rounded against the panel — that read as merged into the panel
    instead of a separate control, and didn't match the bottom toggle's
-   style). Panel width is the fixed .floating-panel default (260px), so the
-   open offset is a plain constant rather than something measured at
-   runtime.
+   style). The `.is-open` offsets below (280px) are only the pre-hydration
+   fallback now that panel width is resizable/persisted — Hierarchy.tsx and
+   Inspector.tsx set `left`/`right` inline from the live panelLayout width
+   (+20 for the margin/gap), which overrides the CSS constant.
    `top` is a fixed offset near the panel's own header, not `top: 50%` of
    the viewport — the panels' heights vary a lot with content (Hierarchy
    with 2 objects vs. 20; SceneInspector vs. a full object Inspector), and
@@ -523,6 +564,14 @@ button.asset-tile.active {
 
 .hierarchy {
   left: 12px;
+}
+
+/* `right: 0` (not a negative offset) — .floating-panel sets `overflow-y:
+   auto`, which per the CSS overflow spec forces `overflow-x` to compute as
+   `auto` too, clipping (and un-hit-testing) anything positioned outside the
+   box. */
+.hierarchy .resize-handle {
+  right: 0;
 }
 
 /* Back arrow + campaign title row (Spline-style panel header) — see
@@ -641,8 +690,16 @@ button.asset-tile.active {
      Rotação/Escala/Pivô axis inputs (see .axis-field below) were clipping
      values past ~3-4 digits at that width. Long values (e.g. a negative
      number with 3 decimals) can still clip at 300px — accepted tradeoff,
-     not worth widening further for that edge case. */
+     not worth widening further for that edge case. This is only the
+     pre-hydration fallback now — SelectionPanel.tsx sets width inline from
+     the persisted/resizable panelLayout.inspectorWidth, which overrides it. */
   width: 300px;
+}
+
+/* `left: 0` (not a negative offset) — same overflow-clipping reason as
+   .hierarchy .resize-handle above. */
+.selection-panel .resize-handle {
+  left: 0;
 }
 
 .selection-header {
@@ -792,13 +849,17 @@ button.asset-tile.active {
 }
 
 /* Keyframe/transport panel (AnimationPanel.tsx) — sits left of the Inspector
-   (.selection-panel is right: 12px, 260px wide) so both are visible while
-   posing a keyframe. Plain absolute offset like every other .floating-panel,
-   deliberately NOT centered with a `transform` like .asset-browser — that's
-   what traps a `position: fixed` descendant into the panel's own box instead
-   of the viewport (see AssetContextMenu.tsx's portal fix from earlier). */
+   so both are visible while posing a keyframe. Plain absolute offset like
+   every other .floating-panel, deliberately NOT centered with a `transform`
+   like .asset-browser — that's what traps a `position: fixed` descendant
+   into the panel's own box instead of the viewport (see AssetContextMenu.tsx's
+   portal fix from earlier).
+   `right` used to be a hardcoded 286px, computed from a stale assumption
+   that .selection-panel was 260px wide (it's actually 300px, a ~26px real
+   overlap bug) — now that the Inspector's width is resizable/persisted,
+   AnimationPanel.tsx sets `right` inline from the live panelLayout.inspectorWidth
+   instead, so this can't drift out of sync again. */
 .animation-panel {
-  right: 286px;
   width: 280px;
 }
 
@@ -1390,12 +1451,14 @@ button.asset-tile.active {
    header) — floats over the viewport just left of .selection-panel, no
    backdrop, same visual language as .floating-panel. Editing the pivot here
    compensates Position so the mesh doesn't visibly jump — see
-   handlePivotChange in Inspector.tsx. */
+   handlePivotChange in Inspector.tsx.
+   `right` used to be a hardcoded 324px (300px selection-panel + 12px margin
+   + 12px gap) — now that the Inspector's width is resizable/persisted,
+   Inspector.tsx sets `right` inline from the live panelLayout.inspectorWidth
+   using the same formula instead. */
 .edit-pivot-panel {
   position: absolute;
   top: 12px;
-  /* Sits just left of .selection-panel (300px wide + 12px margin + 12px gap). */
-  right: 324px;
   width: 240px;
   background: rgba(26, 29, 34, 0.92);
   backdrop-filter: blur(6px);

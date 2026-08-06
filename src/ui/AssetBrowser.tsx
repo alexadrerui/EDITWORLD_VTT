@@ -24,6 +24,7 @@ import { AssetContextMenu } from './AssetContextMenu'
 import { useAssetContextMenu } from './useAssetContextMenu'
 import { ItemContextMenu } from './ItemContextMenu'
 import { useItemContextMenu } from './useItemContextMenu'
+import { ResizeHandle } from './ResizeHandle'
 import type { AssetBrowserTab, AssetFolder, AssetFolderTab } from '../types'
 
 // "Asset Store" used to live here as a tab (see git history) — it moved out
@@ -768,11 +769,20 @@ export function AssetBrowser() {
   const toggleOpen = useEditorStore((s) => s.toggleAssetBrowser)
   const activeTab = useEditorStore((s) => s.assetBrowserTab)
   const setActiveTab = useEditorStore((s) => s.setAssetBrowserTab)
+  const assetBrowserHeight = useEditorStore((s) => s.panelLayout.assetBrowserHeight)
+  const setPanelLayout = useEditorStore((s) => s.setPanelLayout)
+  const persistPanelLayout = useEditorStore((s) => s.persistPanelLayout)
 
   return (
     <>
       {open && (
-        <div className="asset-browser">
+        <div className="asset-browser" style={{ height: assetBrowserHeight }}>
+          <ResizeHandle
+            orientation="horizontal"
+            // Top edge: dragging up (negative delta) grows the panel.
+            onResize={(delta) => setPanelLayout({ assetBrowserHeight: assetBrowserHeight - delta })}
+            onResizeEnd={persistPanelLayout}
+          />
           <div className="asset-browser-sidebar">
             {TABS.map(({ value, label, icon: Icon }) => (
               <button

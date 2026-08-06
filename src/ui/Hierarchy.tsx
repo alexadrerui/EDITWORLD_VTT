@@ -25,10 +25,13 @@ import {
 import { useEditorStore } from '../state/useEditorStore'
 import { PRIMITIVE_ICON as KIND_ICON } from '../scene/primitives'
 import type { SceneObject } from '../types'
-import { exportProjectFile, importProjectFile } from '../state/projectFile'
+import { exportProjectFile, exportSceneFile, importProjectFile } from '../state/projectFile'
 import { ConfirmDialog } from './ConfirmDialog'
 import { ImportModal } from './ImportModal'
 import { AssetStoreModal } from './AssetStoreModal'
+import { ResizeHandle } from './ResizeHandle'
+import { ItemContextMenu } from './ItemContextMenu'
+import { useItemContextMenu } from './useItemContextMenu'
 
 function ScenesSection() {
   const scenesIndex = useEditorStore((s) => s.scenesIndex)
@@ -38,11 +41,13 @@ function ScenesSection() {
   const createScene = useEditorStore((s) => s.createScene)
   const saveScene = useEditorStore((s) => s.saveScene)
   const renameScene = useEditorStore((s) => s.renameScene)
+  const removeScene = useEditorStore((s) => s.removeScene)
 
   const [collapsed, setCollapsed] = useState(false)
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draftName, setDraftName] = useState('')
+  const { menu: sceneMenu, openItemMenu: openSceneMenu, close: closeSceneMenu } = useItemContextMenu()
 
   const runOrConfirm = (action: () => void) => {
     if (isDirty) setPendingAction(() => action)
@@ -82,6 +87,13 @@ function ScenesSection() {
               key={scene.id}
               className={scene.id === currentSceneId ? 'selected' : ''}
               onClick={() => runOrConfirm(() => switchScene(scene.id))}
+              onContextMenu={(e) =>
+                openSceneMenu(
+                  e,
+                  scenesIndex.length > 1 ? () => removeScene(scene.id) : undefined,
+                  [{ label: 'Exportar', icon: Download, onClick: () => exportSceneFile(scene) }],
+                )
+              }
             >
               <span className="scenes-check">
                 {scene.id === currentSceneId && <Check size={13} />}
@@ -134,6 +146,8 @@ function ScenesSection() {
           }}
         />
       )}
+
+      <ItemContextMenu menu={sceneMenu} close={closeSceneMenu} label="Excluir cena" />
     </div>
   )
 }
@@ -368,12 +382,16 @@ export function Hierarchy() {
   const toggleHidden = useEditorStore((s) => s.toggleHidden)
   const setObjectGroup = useEditorStore((s) => s.setObjectGroup)
   const createGroup = useEditorStore((s) => s.createGroup)
+  const groupSelected = useEditorStore((s) => s.groupSelected)
   const removeGroup = useEditorStore((s) => s.removeGroup)
   const renameGroup = useEditorStore((s) => s.renameGroup)
   const toggleGroupLocked = useEditorStore((s) => s.toggleGroupLocked)
   const toggleGroupHidden = useEditorStore((s) => s.toggleGroupHidden)
   const hierarchyVisible = useEditorStore((s) => s.hierarchyVisible)
   const toggleHierarchyVisible = useEditorStore((s) => s.toggleHierarchyVisible)
+  const hierarchyWidth = useEditorStore((s) => s.panelLayout.hierarchyWidth)
+  const setPanelLayout = useEditorStore((s) => s.setPanelLayout)
+  const persistPanelLayout = useEditorStore((s) => s.persistPanelLayout)
 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draftName, setDraftName] = useState('')
@@ -385,6 +403,16 @@ export function Hierarchy() {
   const [exportingProject, setExportingProject] = useState(false)
   const [pendingProjectImport, setPendingProjectImport] = useState<File | null>(null)
   const projectFileInputRef = useRef<HTMLInputElement>(null)
+  const { menu: objectMenu, openItemMenu: openObjectMenu, close: closeObjectMenu } = useItemContextMenu()
+
+  // Right-click-anywhere-in-the-objects-list "Novo grupo" — groups the
+  // current selection (same as MultiSelectionInspector's "Agrupar
+  // selecionados") when something's selected, otherwise creates an empty
+  // group like the toolbar button next to the search field.
+  const handleNewGroup = () => {
+    if (selectedIds.length > 0) groupSelected()
+    else createGroup()
+  }
 
   const handleExportProject = async () => {
     setExportingProject(true)
@@ -468,7 +496,7 @@ export function Hierarchy() {
   return (
     <>
       {hierarchyVisible && (
-        <div className="floating-panel hierarchy">
+        <div className="floating-panel hierarchy" style={{ width: hierarchyWidth }}>
           <CampaignHeader />
           <PanelTabs active={panelTab} onChange={setPanelTab} />
 
@@ -495,6 +523,14 @@ export function Hierarchy() {
             </button>
           </div>
 
+      <div
+        className="hierarchy-object-list"
+        onContextMenu={(e) =>
+          openObjectMenu(e, undefined, [
+            { label: 'Novo grupo', icon: FolderPlus, onClick: handleNewGroup },
+          ])
+        }
+      >
       {objects.length === 0 && <p className="empty">Nenhum objeto na cena</p>}
       {objects.length > 0 && isSearching && filteredObjects.length === 0 && (
         <p className="empty">Nenhum objeto encontrado</p>
@@ -605,6 +641,7 @@ export function Hierarchy() {
           </ul>
         </div>
       )}
+      </div>
             </>
           )}
 
@@ -615,10 +652,16 @@ export function Hierarchy() {
             onImportProject={() => projectFileInputRef.current?.click()}
             exportingProject={exportingProject}
           />
+          <ResizeHandle
+            orientation="vertical"
+            onResize={(delta) => setPanelLayout({ hierarchyWidth: hierarchyWidth + delta })}
+            onResizeEnd={persistPanelLayout}
+          />
         </div>
       )}
       <button
         className={`panel-collapse-toggle panel-collapse-toggle--left ${hierarchyVisible ? 'is-open' : ''}`}
+        style={{ left: hierarchyVisible ? hierarchyWidth + 20 : undefined }}
         onClick={() => toggleHierarchyVisible()}
         title={hierarchyVisible ? 'Esconder painel' : 'Mostrar painel'}
       >
@@ -643,6 +686,8 @@ export function Hierarchy() {
           onConfirm={confirmProjectImport}
         />
       )}
+
+      <ItemContextMenu menu={objectMenu} close={closeObjectMenu} />
     </>
   )
 }

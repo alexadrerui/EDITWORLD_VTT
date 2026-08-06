@@ -109,6 +109,62 @@ export function saveCampaignName(name: string) {
   localStorage.setItem(CAMPAIGN_NAME_KEY, name)
 }
 
+// Floating-panel resize state (Hierarchy/Inspector width, AssetBrowser
+// height) — a global UI preference like campaignName above, not per-scene
+// content, persisted immediately on drag-end rather than waiting for the
+// scene's own "Salvar".
+const PANEL_LAYOUT_KEY = 'editworld-vtt:panel-layout'
+
+export interface PanelLayout {
+  hierarchyWidth: number
+  inspectorWidth: number
+  assetBrowserHeight: number
+}
+
+const DEFAULT_PANEL_LAYOUT: PanelLayout = {
+  hierarchyWidth: 260,
+  inspectorWidth: 300,
+  assetBrowserHeight: 260,
+}
+
+// Exported so ResizeHandle callers can clamp live drag deltas against the
+// same bounds used to sanitize a value loaded from localStorage.
+export const PANEL_LAYOUT_BOUNDS: Record<keyof PanelLayout, { min: number; max: number }> = {
+  hierarchyWidth: { min: 220, max: 480 },
+  // 280 = roughly where the Posição/Rotação/Escala/Pivô axis inputs started
+  // clipping before .selection-panel was widened to its current 300px
+  // default (see the App.css comment on .selection-panel).
+  inspectorWidth: { min: 280, max: 480 },
+  assetBrowserHeight: { min: 160, max: 560 },
+}
+
+function clampPanelLayout(layout: PanelLayout): PanelLayout {
+  const clamp = (value: number, key: keyof PanelLayout) => {
+    const { min, max } = PANEL_LAYOUT_BOUNDS[key]
+    return Math.min(max, Math.max(min, value))
+  }
+  return {
+    hierarchyWidth: clamp(layout.hierarchyWidth, 'hierarchyWidth'),
+    inspectorWidth: clamp(layout.inspectorWidth, 'inspectorWidth'),
+    assetBrowserHeight: clamp(layout.assetBrowserHeight, 'assetBrowserHeight'),
+  }
+}
+
+function loadPanelLayout(): PanelLayout {
+  try {
+    const raw = localStorage.getItem(PANEL_LAYOUT_KEY)
+    return raw
+      ? clampPanelLayout({ ...DEFAULT_PANEL_LAYOUT, ...(JSON.parse(raw) as Partial<PanelLayout>) })
+      : DEFAULT_PANEL_LAYOUT
+  } catch {
+    return DEFAULT_PANEL_LAYOUT
+  }
+}
+
+function savePanelLayout(layout: PanelLayout) {
+  localStorage.setItem(PANEL_LAYOUT_KEY, JSON.stringify(layout))
+}
+
 // Custom (photo-imported placeholder) assets, see ImportStudio.tsx — a
 // global library like scenesIndex, not per-scene content, so it persists
 // immediately on every mutation instead of waiting for the scene's own
@@ -219,6 +275,10 @@ export function loadSceneData(id: string): SceneData {
 
 export function saveSceneData(id: string, data: SceneData) {
   localStorage.setItem(sceneDataKey(id), JSON.stringify(data))
+}
+
+function deleteSceneData(id: string) {
+  localStorage.removeItem(sceneDataKey(id))
 }
 
 // Undo/redo, kept as a stack of minimal diffs rather than full command
@@ -504,6 +564,7 @@ interface EditorState {
   assetBrowserTab: AssetBrowserTab
   hierarchyVisible: boolean
   inspectorVisible: boolean
+  panelLayout: PanelLayout
   undoStack: HistoryEntry[]
   redoStack: HistoryEntry[]
   customAssets: CustomAsset[]
@@ -650,12 +711,18 @@ interface EditorState {
   setAssetBrowserTab: (tab: AssetBrowserTab) => void
   toggleHierarchyVisible: () => void
   toggleInspectorVisible: () => void
+  setPanelLayout: (patch: Partial<PanelLayout>) => void
+  persistPanelLayout: () => void
   undo: () => void
   redo: () => void
   saveScene: () => void
   createScene: () => void
   switchScene: (id: string) => void
   renameScene: (id: string, name: string) => void
+  // No-ops if id is the only remaining scene — there must always be at
+  // least one. Callers (Hierarchy.tsx) omit the delete action from the UI
+  // entirely in that case rather than relying on this silently no-op-ing.
+  removeScene: (id: string) => void
   renameCampaign: (name: string) => void
 }
 
@@ -720,6 +787,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   assetBrowserTab: 'objects',
   hierarchyVisible: true,
   inspectorVisible: true,
+  panelLayout: loadPanelLayout(),
   undoStack: [],
   redoStack: [],
   customAssets: initialCustomAssets,
@@ -1454,6 +1522,17 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set((state) => ({ hierarchyVisible: !state.hierarchyVisible })),
   toggleInspectorVisible: () =>
     set((state) => ({ inspectorVisible: !state.inspectorVisible })),
+  // Only updates in-memory state — called on every pointermove while
+  // dragging a ResizeHandle, same "mutate live" convention as
+  // CompactGizmo/ScaleFaceHandles. persistPanelLayout (below) is the
+  // pointerup commit that actually writes to localStorage.
+  setPanelLayout: (patch) =>
+    set((state) => ({ panelLayout: clampPanelLayout({ ...state.panelLayout, ...patch }) })),
+  persistPanelLayout: () =>
+    set((state) => {
+      savePanelLayout(state.panelLayout)
+      return {}
+    }),
 
   // Batch entries are undone in reverse order of how their sub-entries were
   // recorded (each 'remove' entry's `index` was captured against the
@@ -1578,6 +1657,46 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const scenesIndex = get().scenesIndex.map((s) => (s.id === id ? { ...s, name: trimmed } : s))
     saveScenesIndex(scenesIndex)
     set({ scenesIndex })
+  },
+
+  removeScene: (id) => {
+    const state = get()
+    if (state.scenesIndex.length <= 1) return
+    const scenesIndex = state.scenesIndex.filter((s) => s.id !== id)
+    saveScenesIndex(scenesIndex)
+    deleteSceneData(id)
+
+    if (id !== state.currentSceneId) {
+      set({ scenesIndex })
+      return
+    }
+
+    // Deleted the currently open scene — fall back to the first remaining
+    // one, same "load its data fresh" shape as switchScene.
+    const next = scenesIndex[0]
+    localStorage.setItem(CURRENT_KEY, next.id)
+    const data = loadSceneData(next.id)
+    set({
+      scenesIndex,
+      currentSceneId: next.id,
+      objects: data.objects,
+      groups: data.groups,
+      sceneSettings: data.settings,
+      animations: data.animations,
+      cutscenes: data.cutscenes,
+      selectedIds: [],
+      isDirty: false,
+      undoStack: [],
+      redoStack: [],
+      editingAnimationClipId: null,
+      editingKeyframeId: null,
+      testingAnimationId: null,
+      animationPlaying: false,
+      editingCutsceneId: null,
+      editingCutsceneKeyframeId: null,
+      testingCutsceneId: null,
+      cutscenePlaying: false,
+    })
   },
 
   renameCampaign: (name) => {
