@@ -1,14 +1,18 @@
 import {
+  Archive,
   Box,
   Boxes,
   Camera,
   Circle,
   Cone,
+  CookingPot,
   Cylinder,
+  Flame,
   Gem,
   Hexagon,
   Infinity as InfinityIcon,
   Lightbulb,
+  Package,
   Spotlight,
   Square,
   Sun,
@@ -17,7 +21,15 @@ import {
   Volume2,
   type LucideIcon,
 } from 'lucide-react'
-import type { CameraKind, ImportedKind, LightKind, PrimitiveKind, SceneObject, ShadowResolution } from '../types'
+import type {
+  CameraKind,
+  ImportedKind,
+  LightKind,
+  PrimitiveKind,
+  ProceduralKind,
+  SceneObject,
+  ShadowResolution,
+} from '../types'
 
 // Bounding-box size (width, height, depth) of each primitive's base geometry
 // at scale [1, 1, 1] — must match the geometry args in SceneObjectMesh.tsx's
@@ -59,6 +71,14 @@ export const PRIMITIVE_BASE_SIZE: Record<PrimitiveKind, [number, number, number]
   // Same small gizmo-icon size as the light kinds above — soundSource has no
   // real geometry either.
   soundSource: [0.4, 0.4, 0.4],
+  // Approximate footprints of the procedural groups built in
+  // proceduralModels.ts — same "rough stand-in, not a real bound" tolerance
+  // already accepted for importedModel above (SelectionOutline only ever
+  // draws a box anyway).
+  barrel: [0.7, 0.9, 0.7],
+  treasureChest: [1, 0.7, 0.6],
+  wallTorch: [0.35, 0.6, 0.35],
+  cauldron: [0.9, 0.7, 0.9],
 }
 
 export const PRIMITIVE_LABEL: Record<PrimitiveKind, string> = {
@@ -78,6 +98,10 @@ export const PRIMITIVE_LABEL: Record<PrimitiveKind, string> = {
   camera: 'Câmera',
   importedModel: 'Modelo importado',
   soundSource: 'Fonte de som',
+  barrel: 'Barril',
+  treasureChest: 'Baú do tesouro',
+  wallTorch: 'Tocha de parede',
+  cauldron: 'Caldeirão',
 }
 
 // Shared with Hierarchy.tsx and AssetBrowser.tsx so the icon-per-kind mapping
@@ -99,6 +123,10 @@ export const PRIMITIVE_ICON: Record<PrimitiveKind, LucideIcon> = {
   camera: Camera,
   importedModel: Boxes,
   soundSource: Volume2,
+  barrel: Package,
+  treasureChest: Archive,
+  wallTorch: Flame,
+  cauldron: CookingPot,
 }
 
 export const LIGHT_KINDS: LightKind[] = ['pointLight', 'spotLight', 'directionalLight']
@@ -120,6 +148,14 @@ export function isSoundKind(kind: PrimitiveKind): kind is 'soundSource' {
 }
 
 export const IMPORTED_KINDS: ImportedKind[] = ['importedModel', 'soundSource']
+
+export const PROCEDURAL_KINDS: ProceduralKind[] = ['barrel', 'treasureChest', 'wallTorch', 'cauldron']
+
+export function isProceduralKind(kind: PrimitiveKind): kind is ProceduralKind {
+  return (
+    kind === 'barrel' || kind === 'treasureChest' || kind === 'wallTorch' || kind === 'cauldron'
+  )
+}
 
 // Default light parameters used when a new light object is created (see
 // createPrimitive in useEditorStore.ts) and as the migration default for

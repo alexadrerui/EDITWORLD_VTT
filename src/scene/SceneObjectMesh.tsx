@@ -15,7 +15,7 @@ import {
   Float32BufferAttribute,
   FrontSide,
   IcosahedronGeometry,
-  type Mesh,
+  Mesh,
   MultiplyBlending,
   NormalBlending,
   type Object3D,
@@ -48,7 +48,7 @@ import {
   vec3,
   vec4,
 } from 'three/tsl'
-import type { BlendMode, MaterialSide, MaterialType, SceneObject, ShadowMode } from '../types'
+import type { BlendMode, MaterialSide, MaterialType, ProceduralKind, SceneObject, ShadowMode } from '../types'
 import { useEditorStore } from '../state/useEditorStore'
 import { usePointerClick } from './usePointerClick'
 import {
@@ -57,6 +57,7 @@ import {
   isCameraKind,
   isImportedModelKind,
   isLightKind,
+  isProceduralKind,
   isSoundKind,
   PRIMITIVE_BASE_SIZE,
   SHADOW_MAP_SIZE,
@@ -71,6 +72,7 @@ import {
 import { globalAudioListener } from './audioListener'
 import { useAnimationPreview } from '../animation/animationEngine'
 import { registerMesh, unregisterMesh } from '../animation/meshRegistry'
+import { PROCEDURAL_GENERATORS } from './proceduralModels'
 
 const MATERIAL_SIDE: Record<MaterialSide, Side> = {
   front: FrontSide,
@@ -903,6 +905,80 @@ function ImportedModelContent({ object }: { object: SceneObject }) {
   )
 }
 
+// Procedural props (barrel/treasureChest/wallTorch/cauldron, see
+// proceduralModels.ts) — same shape as ImportedModelContent above (a
+// multi-mesh Group mounted via <primitive>), except the Group is built in
+// code instead of loaded from a GLTF blob, so there's no async status/
+// instancing to handle. shadowMode doesn't cascade through a Group the way
+// shadowProps() spread onto a single <mesh> does for the default primitive
+// branch, so it's applied by hand to every generated sub-mesh here.
+function ProceduralModelContent({ object }: { object: SceneObject }) {
+  const kind = object.kind as ProceduralKind
+  const group = useMemo(() => PROCEDURAL_GENERATORS[kind](), [kind])
+
+  useEffect(() => {
+    const { castShadow, receiveShadow } = shadowProps(object.shadowMode)
+    group.traverse((child) => {
+      if (child instanceof Mesh) {
+        child.castShadow = castShadow
+        child.receiveShadow = receiveShadow
+      }
+    })
+  }, [group, object.shadowMode])
+
+  // Weathering (see buildWeatheringNode above) — one colorNode per generated
+  // submesh's own material, built once per material instance so it can read
+  // that submesh's own base `color` (wood/metal/gold/iron all weather from
+  // their own tone, not a shared one). Skips meshes named 'flame' (see
+  // buildWallTorch in proceduralModels.ts) — dirt/wear tinting an emissive
+  // fire surface would read wrong. Every submesh is its own fresh material
+  // instance (never shared across objects, see proceduralModels.ts), so
+  // there's no risk of two objects fighting over the same colorNode.
+  useEffect(() => {
+    group.traverse((child) => {
+      if (child instanceof Mesh && child.name !== 'flame' && !Array.isArray(child.material)) {
+        const material = child.material as WeatheredMaterial
+        material.weatheringColor = new Color()
+        material.colorNode = buildWeatheringNode(material)
+      }
+    })
+  }, [group])
+
+  // Live values the node graph above reads via reference() — same split as
+  // Material()'s two effects: the node graph itself only needs building
+  // once, but dirtAmount/wearAmount/weatheringColor can change any time via
+  // the Inspector.
+  useEffect(() => {
+    group.traverse((child) => {
+      if (child instanceof Mesh && child.name !== 'flame' && !Array.isArray(child.material)) {
+        const weathered = child.material as WeatheredMaterial
+        weathered.dirtAmount = object.dirtAmount
+        weathered.wearAmount = object.wearAmount
+        weathered.weatheringColor?.set(object.weatheringColor)
+      }
+    })
+  }, [group, object.dirtAmount, object.wearAmount, object.weatheringColor])
+
+  // Dispose every generated geometry/material when this object is removed or
+  // rebuilt for a different kind — each call to a PROCEDURAL_GENERATORS
+  // entry allocates fresh GPU resources (see proceduralModels.ts), never
+  // shared across objects, so nothing else could still be using them.
+  useEffect(
+    () => () => {
+      group.traverse((child) => {
+        if (child instanceof Mesh) {
+          child.geometry.dispose()
+          if (Array.isArray(child.material)) child.material.forEach((m) => m.dispose())
+          else child.material.dispose()
+        }
+      })
+    },
+    [group],
+  )
+
+  return <primitive object={group} />
+}
+
 // Memoized: SceneObjects.tsx renders one of these per scene object every
 // time the store's `objects` array changes, and useEditorStore's
 // updateObject/updateObjects preserve referential identity for every object
@@ -984,6 +1060,22 @@ export const SceneObjectMesh = memo(
           onPointerUp={onPointerUp}
         >
           <ImportedModelContent object={object} />
+        </mesh>
+      )
+    }
+
+    if (isProceduralKind(object.kind)) {
+      return (
+        <mesh
+          ref={setRefs}
+          name={object.id}
+          position={isPreviewing ? undefined : object.position}
+          rotation={isPreviewing ? undefined : object.rotation}
+          scale={isPreviewing ? undefined : object.scale}
+          onPointerDown={onPointerDown}
+          onPointerUp={onPointerUp}
+        >
+          <ProceduralModelContent object={object} />
         </mesh>
       )
     }

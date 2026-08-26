@@ -31,6 +31,7 @@ import {
   SOUND_DEFAULTS,
   isLightKind,
 } from '../scene/primitives'
+import type { SceneTemplate } from '../scene/sceneTemplates'
 import {
   deleteAsset as deleteAssetRecord,
   listAssets,
@@ -212,65 +213,104 @@ export interface SceneData {
   cutscenes: Cutscene[]
 }
 
+const EMPTY_SCENE_DATA: SceneData = {
+  objects: [],
+  groups: [],
+  settings: DEFAULT_SCENE_SETTINGS,
+  animations: [],
+  cutscenes: [],
+}
+
+// Fills in every field a Partial<SceneObject>/Partial<SceneGroup> might be
+// missing — shared by loadSceneData below (an older save predating a field)
+// and by instantiateTemplate (a hand-authored scene template only specifying
+// the fields that matter for its layout). Keeping one copy of this default
+// list means a template never needs updating just because SceneObject grew a
+// new field — same reasoning as the loader convention in CLAUDE.md.
+export function normalizeSceneData(parsed: unknown): SceneData {
+  // Older saves stored just the objects array directly (no groups/settings yet).
+  const rawObjects = Array.isArray(parsed) ? parsed : ((parsed as SceneData).objects ?? [])
+  const rawGroups = Array.isArray(parsed) ? [] : ((parsed as SceneData).groups ?? [])
+  const rawSettings = Array.isArray(parsed) ? {} : ((parsed as SceneData).settings ?? {})
+  // Older saves predate animations/cutscenes entirely — default to none.
+  const rawAnimations = Array.isArray(parsed) ? [] : ((parsed as SceneData).animations ?? [])
+  const rawCutscenes = Array.isArray(parsed) ? [] : ((parsed as SceneData).cutscenes ?? [])
+  const objects = (rawObjects as Array<Partial<SceneObject>>).map(
+    (o) =>
+      ({
+        snapToObjects: false,
+        locked: false,
+        hidden: false,
+        groupId: null,
+        wireframe: false,
+        flatShading: false,
+        side: 'front',
+        shadowMode: 'both',
+        materialType: 'standard',
+        emissiveColor: '#000000',
+        emissiveIntensity: 0,
+        opacity: 1,
+        blending: 'normal',
+        roughness: 1,
+        metalness: 0,
+        dirtAmount: 0,
+        wearAmount: 0,
+        weatheringColor: '#2b2118',
+        colorMapAssetId: null,
+        videoMapAssetId: null,
+        animationId: null,
+        pivotOffset: [0, 0, 0],
+        ...LIGHT_DEFAULTS,
+        ...SOUND_DEFAULTS,
+        ...o,
+      }) as SceneObject,
+  )
+  const groups = (rawGroups as Array<Partial<SceneGroup>>).map(
+    (g) => ({ locked: false, hidden: false, ...g }) as SceneGroup,
+  )
+  const settings = { ...DEFAULT_SCENE_SETTINGS, ...rawSettings }
+  const animations = rawAnimations as AnimationClip[]
+  const cutscenes = rawCutscenes as Cutscene[]
+  return { objects, groups, settings, animations, cutscenes }
+}
+
 export function loadSceneData(id: string): SceneData {
-  const empty = {
-    objects: [],
-    groups: [],
-    settings: DEFAULT_SCENE_SETTINGS,
-    animations: [],
-    cutscenes: [],
-  }
   try {
     const raw = localStorage.getItem(sceneDataKey(id))
-    if (!raw) return empty
-    const parsed: unknown = JSON.parse(raw)
-    // Older saves stored just the objects array directly (no groups/settings yet).
-    const rawObjects = Array.isArray(parsed) ? parsed : ((parsed as SceneData).objects ?? [])
-    const rawGroups = Array.isArray(parsed) ? [] : ((parsed as SceneData).groups ?? [])
-    const rawSettings = Array.isArray(parsed) ? {} : ((parsed as SceneData).settings ?? {})
-    // Older saves predate animations/cutscenes entirely — default to none.
-    const rawAnimations = Array.isArray(parsed) ? [] : ((parsed as SceneData).animations ?? [])
-    const rawCutscenes = Array.isArray(parsed) ? [] : ((parsed as SceneData).cutscenes ?? [])
-    const objects = (rawObjects as Array<Partial<SceneObject>>).map(
-      (o) =>
-        ({
-          snapToObjects: false,
-          locked: false,
-          hidden: false,
-          groupId: null,
-          wireframe: false,
-          flatShading: false,
-          side: 'front',
-          shadowMode: 'both',
-          materialType: 'standard',
-          emissiveColor: '#000000',
-          emissiveIntensity: 0,
-          opacity: 1,
-          blending: 'normal',
-          roughness: 1,
-          metalness: 0,
-          dirtAmount: 0,
-          wearAmount: 0,
-          weatheringColor: '#2b2118',
-          colorMapAssetId: null,
-          videoMapAssetId: null,
-          animationId: null,
-          pivotOffset: [0, 0, 0],
-          ...LIGHT_DEFAULTS,
-          ...SOUND_DEFAULTS,
-          ...o,
-        }) as SceneObject,
-    )
-    const groups = (rawGroups as Array<Partial<SceneGroup>>).map(
-      (g) => ({ locked: false, hidden: false, ...g }) as SceneGroup,
-    )
-    const settings = { ...DEFAULT_SCENE_SETTINGS, ...rawSettings }
-    const animations = rawAnimations as AnimationClip[]
-    const cutscenes = rawCutscenes as Cutscene[]
-    return { objects, groups, settings, animations, cutscenes }
+    if (!raw) return EMPTY_SCENE_DATA
+    return normalizeSceneData(JSON.parse(raw))
   } catch {
-    return empty
+    return EMPTY_SCENE_DATA
   }
+}
+
+// Turns a hand-authored SceneTemplate (see sceneTemplates.ts) into real
+// SceneData ready to save/load like any other scene. Template ids are just
+// short human-readable strings the template author picked for cross-
+// referencing (object.groupId -> group.id) within that one template — every
+// id gets replaced with a real genId() here so two instantiations of the
+// same template (or a template id colliding with an unrelated object from
+// another scene) never share an id, matching this project's "ids are
+// crypto.randomUUID()-based, never hand-picked" convention. Templates never
+// carry animations/cutscenes (see SceneTemplate's docstring), so there's no
+// AnimationClip/CutsceneTrack objectId reference to remap here.
+function instantiateTemplate(template: SceneTemplate): SceneData {
+  const idMap = new Map<string, string>()
+  const groups = template.groups.map((g) => {
+    const id = genId('group')
+    idMap.set(g.id, id)
+    return { ...g, id } as SceneGroup
+  })
+  const objects = template.objects.map((o) => {
+    const id = genId('obj')
+    idMap.set(o.id, id)
+    return { ...o, id }
+  })
+  const remapped = objects.map((o) => ({
+    ...o,
+    groupId: o.groupId ? (idMap.get(o.groupId) ?? null) : null,
+  }))
+  return normalizeSceneData({ objects: remapped, groups, settings: template.settings ?? {}, animations: [], cutscenes: [] })
 }
 
 export function saveSceneData(id: string, data: SceneData) {
@@ -717,6 +757,7 @@ interface EditorState {
   redo: () => void
   saveScene: () => void
   createScene: () => void
+  createSceneFromTemplate: (template: SceneTemplate, name: string) => void
   switchScene: (id: string) => void
   renameScene: (id: string, name: string) => void
   // No-ops if id is the only remaining scene — there must always be at
@@ -1609,6 +1650,37 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       sceneSettings: DEFAULT_SCENE_SETTINGS,
       animations: [],
       cutscenes: [],
+      selectedIds: [],
+      isDirty: false,
+      undoStack: [],
+      redoStack: [],
+      editingAnimationClipId: null,
+      editingKeyframeId: null,
+      testingAnimationId: null,
+      animationPlaying: false,
+      editingCutsceneId: null,
+      editingCutsceneKeyframeId: null,
+      testingCutsceneId: null,
+      cutscenePlaying: false,
+    })
+  },
+
+  createSceneFromTemplate: (template, name) => {
+    const state = get()
+    const meta: SceneMeta = { id: genId('scene'), name }
+    const scenesIndex = [...state.scenesIndex, meta]
+    saveScenesIndex(scenesIndex)
+    const data = instantiateTemplate(template)
+    saveSceneData(meta.id, data)
+    localStorage.setItem(CURRENT_KEY, meta.id)
+    set({
+      scenesIndex,
+      currentSceneId: meta.id,
+      objects: data.objects,
+      groups: data.groups,
+      sceneSettings: data.settings,
+      animations: data.animations,
+      cutscenes: data.cutscenes,
       selectedIds: [],
       isDirty: false,
       undoStack: [],

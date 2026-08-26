@@ -38,7 +38,15 @@ export type CameraKind = 'camera'
 // colorMapAssetId/videoMapAssetId/sound* fields on SceneObject below.
 export type ImportedKind = 'importedModel' | 'soundSource'
 
-export type PrimitiveKind = MeshKind | LightKind | CameraKind | ImportedKind
+// Procedurally-generated props — no binary asset, no CSG dependency, just a
+// THREE.Group built in code from primitive geometries (see
+// src/scene/proceduralModels.ts) and rendered via ImportedModelContent's
+// sibling, ProceduralModelContent, in SceneObjectMesh.tsx. Lives in the Asset
+// Store (AssetStoreModal.tsx) rather than the Toolbar's primitive dropdown —
+// these are "assets" conceptually, same reasoning as importedModel.
+export type ProceduralKind = 'barrel' | 'treasureChest' | 'wallTorch' | 'cauldron'
+
+export type PrimitiveKind = MeshKind | LightKind | CameraKind | ImportedKind | ProceduralKind
 
 // Which faces render — mirrors THREE.FrontSide/BackSide/DoubleSide.
 export type MaterialSide = 'front' | 'back' | 'double'
