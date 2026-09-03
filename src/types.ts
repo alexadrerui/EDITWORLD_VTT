@@ -189,6 +189,76 @@ export interface SceneObject {
   // meaning "centered," matches every object created before this field
   // existed); ignored for lights/sound/imported models.
   pivotOffset: [number, number, number]
+  // Which TslNodeGraph (see below) drives this object's material colorNode/
+  // positionNode, if any — same "separate collection + xId reference" shape
+  // as animationId/groupId, not embedded directly here, since a graph's
+  // node/edge lists are variable-length structured data and SceneObject
+  // stays flat (scalars/fixed tuples only) everywhere else. Procedural-kind
+  // objects (barrel/chest/torch/cauldron etc.) don't support this — they're
+  // multi-submesh groups where each submesh intentionally has its own
+  // independently-colored material (see buildWeatheringNode in
+  // SceneObjectMesh.tsx); one graph's colorNode can't be applied uniformly
+  // across them without flattening that. See compileTslGraph.ts.
+  nodeGraphId: string | null
+}
+
+// Every node type the visual TSL editor can place — see compileTslGraph.ts's
+// TSL_NODE_REGISTRY, the single source of truth for each type's sockets/
+// params/compile behavior (mirrors how primitives.ts is the source of truth
+// for PrimitiveKind's sizes/labels/icons).
+export type TslNodeType =
+  | 'uv'
+  | 'time'
+  | 'position'
+  | 'normal'
+  | 'float'
+  | 'vec3Combine'
+  | 'add'
+  | 'sub'
+  | 'mul'
+  | 'div'
+  | 'dot'
+  | 'pow'
+  | 'oneMinus'
+  | 'sin'
+  | 'cos'
+  | 'mix'
+  | 'clamp'
+  | 'output'
+
+// A single node in a TslNodeGraph (see below) — `params` holds both node
+// configuration (e.g. `position`/`normal`'s `space` choice) and inline
+// literal values for any input socket left unwired (e.g. `vec3Combine`'s
+// x/y/z fields, or a `float` node's own value). See compileTslGraph.ts's
+// TSL_NODE_REGISTRY for the exact shape expected per TslNodeType.
+export interface TslGraphNode {
+  id: string
+  type: TslNodeType
+  position: [number, number]
+  params: Record<string, number | string>
+}
+
+// A wire between two TslGraphNodes. `sourceHandle`/`targetHandle` name the
+// specific socket on each side (e.g. a vector-typed source node like `uv`/
+// `position`/`normal` exposes multiple output handles — 'x'/'y'/'z'/'xyz' —
+// resolved via TSL's generic swizzle rather than a dedicated "Split" node).
+export interface TslGraphEdge {
+  id: string
+  source: string
+  sourceHandle: string
+  target: string
+  targetHandle: string
+}
+
+// A small visual TSL shader graph (see src/ui/nodeEditor/), compiled by
+// compileTslGraph.ts into real `colorNode`/`positionNode` node trees for a
+// NodeMaterial. Kept as its own top-level SceneData collection rather than
+// embedded on SceneObject, same rationale as AnimationClip/Cutscene above.
+export interface TslNodeGraph {
+  id: string
+  name: string
+  nodes: TslGraphNode[]
+  edges: TslGraphEdge[]
 }
 
 // One pose of an AnimationClip (see below) — always a full position+rotation+

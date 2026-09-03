@@ -24,6 +24,7 @@ import type {
   SceneObject,
   SceneSettings,
   TransformMode,
+  TslNodeGraph,
 } from '../types'
 import {
   DIRECTIONAL_LIGHT_INTENSITY,
@@ -211,6 +212,7 @@ export interface SceneData {
   settings: SceneSettings
   animations: AnimationClip[]
   cutscenes: Cutscene[]
+  nodeGraphs: TslNodeGraph[]
 }
 
 const EMPTY_SCENE_DATA: SceneData = {
@@ -219,6 +221,7 @@ const EMPTY_SCENE_DATA: SceneData = {
   settings: DEFAULT_SCENE_SETTINGS,
   animations: [],
   cutscenes: [],
+  nodeGraphs: [],
 }
 
 // Fills in every field a Partial<SceneObject>/Partial<SceneGroup> might be
@@ -235,6 +238,8 @@ export function normalizeSceneData(parsed: unknown): SceneData {
   // Older saves predate animations/cutscenes entirely — default to none.
   const rawAnimations = Array.isArray(parsed) ? [] : ((parsed as SceneData).animations ?? [])
   const rawCutscenes = Array.isArray(parsed) ? [] : ((parsed as SceneData).cutscenes ?? [])
+  // Older saves predate node graphs entirely — default to none.
+  const rawNodeGraphs = Array.isArray(parsed) ? [] : ((parsed as SceneData).nodeGraphs ?? [])
   const objects = (rawObjects as Array<Partial<SceneObject>>).map(
     (o) =>
       ({
@@ -260,6 +265,7 @@ export function normalizeSceneData(parsed: unknown): SceneData {
         videoMapAssetId: null,
         animationId: null,
         pivotOffset: [0, 0, 0],
+        nodeGraphId: null,
         ...LIGHT_DEFAULTS,
         ...SOUND_DEFAULTS,
         ...o,
@@ -271,7 +277,8 @@ export function normalizeSceneData(parsed: unknown): SceneData {
   const settings = { ...DEFAULT_SCENE_SETTINGS, ...rawSettings }
   const animations = rawAnimations as AnimationClip[]
   const cutscenes = rawCutscenes as Cutscene[]
-  return { objects, groups, settings, animations, cutscenes }
+  const nodeGraphs = rawNodeGraphs as TslNodeGraph[]
+  return { objects, groups, settings, animations, cutscenes, nodeGraphs }
 }
 
 export function loadSceneData(id: string): SceneData {
@@ -292,8 +299,9 @@ export function loadSceneData(id: string): SceneData {
 // same template (or a template id colliding with an unrelated object from
 // another scene) never share an id, matching this project's "ids are
 // crypto.randomUUID()-based, never hand-picked" convention. Templates never
-// carry animations/cutscenes (see SceneTemplate's docstring), so there's no
-// AnimationClip/CutsceneTrack objectId reference to remap here.
+// carry animations/cutscenes/node graphs (see SceneTemplate's docstring), so
+// there's no AnimationClip/CutsceneTrack/TslNodeGraph objectId reference to
+// remap here.
 function instantiateTemplate(template: SceneTemplate): SceneData {
   const idMap = new Map<string, string>()
   const groups = template.groups.map((g) => {
@@ -310,7 +318,14 @@ function instantiateTemplate(template: SceneTemplate): SceneData {
     ...o,
     groupId: o.groupId ? (idMap.get(o.groupId) ?? null) : null,
   }))
-  return normalizeSceneData({ objects: remapped, groups, settings: template.settings ?? {}, animations: [], cutscenes: [] })
+  return normalizeSceneData({
+    objects: remapped,
+    groups,
+    settings: template.settings ?? {},
+    animations: [],
+    cutscenes: [],
+    nodeGraphs: [],
+  })
 }
 
 export function saveSceneData(id: string, data: SceneData) {
@@ -511,6 +526,7 @@ function createPrimitive(kind: PrimitiveKind, overrides?: Partial<SceneObject>):
     videoMapAssetId: null,
     animationId: null,
     pivotOffset: [0, 0, 0],
+    nodeGraphId: null,
     ...LIGHT_DEFAULTS,
     ...SOUND_DEFAULTS,
     // Directional lights have no distance falloff, so the shared light
@@ -548,6 +564,10 @@ interface EditorState {
   // cutscene's tracks reference objects by id instead. Saved/loaded with the
   // rest of SceneData, same as animations/groups.
   cutscenes: Cutscene[]
+  // Visual TSL shader graphs — see TslNodeGraph in types.ts. Same "separate
+  // collection + xId reference" shape as animations/cutscenes above; saved/
+  // loaded with the rest of SceneData.
+  nodeGraphs: TslNodeGraph[]
   selectedIds: string[]
   // Metadata only (no blob) — hydrated asynchronously from IndexedDB right
   // after this store is created (see the listAssets().then(...) call below
@@ -585,6 +605,9 @@ interface EditorState {
   testingCutsceneId: string | null
   cutscenePlaying: boolean
   cutsceneScrubTime: number
+  // TslNodeEditor.tsx editing state — same "id doubles as is-open" idiom as
+  // editingCutsceneId above. Ephemeral/not persisted (see App.tsx).
+  editingNodeGraphObjectId: string | null
   transformMode: TransformMode
   isDirty: boolean
   positionSnap: PositionSnapMode
@@ -733,6 +756,23 @@ interface EditorState {
   setCutsceneScrubTime: (ms: number) => void
   closeCutsceneStudio: () => void
   moveCutsceneToFolder: (cutsceneId: string, folderId: string | null) => void
+  // TSL node graph actions — mirror createAnimationForObject/deleteAnimation's
+  // shape: pushing/removing the graph itself is not undoable (same bucket as
+  // createGroup), but assigning/clearing SceneObject.nodeGraphId goes through
+  // the normal updateObject (undo-covered for free). Editing an existing
+  // graph's nodes/edges (updateNodeGraph) is likewise not undoable — see its
+  // own doc comment below.
+  createNodeGraphForObject: (objectId: string) => void
+  deleteNodeGraphForObject: (objectId: string) => void
+  // Replaces a graph's nodes/edges wholesale — called by TslNodeEditor.tsx at
+  // interaction checkpoints (drag-stop/connect/delete/literal-blur), not on
+  // every pointer-move. Deliberately bypasses the undo stack (direct set(),
+  // no pushHistory) — same bucket as toggleLocked/updateSceneSettings, so
+  // dragging/wiring nodes doesn't spam Ctrl+Z with fine-grained mouse
+  // gestures the way scene content edits are tracked.
+  updateNodeGraph: (graphId: string, patch: Partial<Pick<TslNodeGraph, 'nodes' | 'edges'>>) => void
+  openNodeEditor: (objectId: string) => void
+  closeNodeEditor: () => void
   select: (id: string | null) => void
   toggleSelect: (id: string) => void
   setTransformMode: (mode: TransformMode) => void
@@ -795,6 +835,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   sceneSettings: initialSceneData.settings,
   animations: initialSceneData.animations,
   cutscenes: initialSceneData.cutscenes,
+  nodeGraphs: initialSceneData.nodeGraphs,
   selectedIds: [],
   assets: [],
   testingSoundId: null,
@@ -809,6 +850,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   testingCutsceneId: null,
   cutscenePlaying: false,
   cutsceneScrubTime: 0,
+  editingNodeGraphObjectId: null,
   transformMode: 'translate',
   isDirty: false,
   positionSnap: null,
@@ -1523,6 +1565,41 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       isDirty: true,
     })),
 
+  createNodeGraphForObject: (objectId) => {
+    const state = get()
+    const object = state.objects.find((o) => o.id === objectId)
+    if (!object) return
+    const graph: TslNodeGraph = {
+      id: genId('nodegraph'),
+      name: 'Grafo TSL',
+      nodes: [{ id: genId('node'), type: 'output', position: [600, 200], params: {} }],
+      edges: [],
+    }
+    set({ nodeGraphs: [...state.nodeGraphs, graph] })
+    get().updateObject(objectId, { nodeGraphId: graph.id })
+  },
+
+  deleteNodeGraphForObject: (objectId) => {
+    const state = get()
+    const object = state.objects.find((o) => o.id === objectId)
+    if (!object?.nodeGraphId) return
+    const graphId = object.nodeGraphId
+    set({
+      nodeGraphs: state.nodeGraphs.filter((g) => g.id !== graphId),
+      editingNodeGraphObjectId: state.editingNodeGraphObjectId === objectId ? null : state.editingNodeGraphObjectId,
+    })
+    get().updateObject(objectId, { nodeGraphId: null })
+  },
+
+  updateNodeGraph: (graphId, patch) =>
+    set((state) => ({
+      nodeGraphs: state.nodeGraphs.map((g) => (g.id === graphId ? { ...g, ...patch } : g)),
+      isDirty: true,
+    })),
+
+  openNodeEditor: (objectId) => set({ editingNodeGraphObjectId: objectId }),
+  closeNodeEditor: () => set({ editingNodeGraphObjectId: null }),
+
   select: (id) => set({ selectedIds: id ? [id] : [] }),
   // Shift/Ctrl/Cmd-click add-or-remove, used by both the viewport (see
   // usePointerClick callers) and the Hierarchy rows — same modifier
@@ -1624,8 +1701,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }),
 
   saveScene: () => {
-    const { currentSceneId, objects, groups, sceneSettings, animations, cutscenes } = get()
-    saveSceneData(currentSceneId, { objects, groups, settings: sceneSettings, animations, cutscenes })
+    const { currentSceneId, objects, groups, sceneSettings, animations, cutscenes, nodeGraphs } = get()
+    saveSceneData(currentSceneId, { objects, groups, settings: sceneSettings, animations, cutscenes, nodeGraphs })
     set({ isDirty: false })
   },
 
@@ -1640,6 +1717,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       settings: DEFAULT_SCENE_SETTINGS,
       animations: [],
       cutscenes: [],
+      nodeGraphs: [],
     })
     localStorage.setItem(CURRENT_KEY, meta.id)
     set({
@@ -1650,6 +1728,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       sceneSettings: DEFAULT_SCENE_SETTINGS,
       animations: [],
       cutscenes: [],
+      nodeGraphs: [],
       selectedIds: [],
       isDirty: false,
       undoStack: [],
@@ -1662,6 +1741,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       editingCutsceneKeyframeId: null,
       testingCutsceneId: null,
       cutscenePlaying: false,
+      editingNodeGraphObjectId: null,
     })
   },
 
@@ -1681,6 +1761,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       sceneSettings: data.settings,
       animations: data.animations,
       cutscenes: data.cutscenes,
+      nodeGraphs: data.nodeGraphs,
       selectedIds: [],
       isDirty: false,
       undoStack: [],
@@ -1693,6 +1774,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       editingCutsceneKeyframeId: null,
       testingCutsceneId: null,
       cutscenePlaying: false,
+      editingNodeGraphObjectId: null,
     })
   },
 
@@ -1708,6 +1790,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       sceneSettings: data.settings,
       animations: data.animations,
       cutscenes: data.cutscenes,
+      nodeGraphs: data.nodeGraphs,
       selectedIds: [],
       isDirty: false,
       undoStack: [],
@@ -1720,6 +1803,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       editingCutsceneKeyframeId: null,
       testingCutsceneId: null,
       cutscenePlaying: false,
+      editingNodeGraphObjectId: null,
     })
   },
 
@@ -1756,6 +1840,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       sceneSettings: data.settings,
       animations: data.animations,
       cutscenes: data.cutscenes,
+      nodeGraphs: data.nodeGraphs,
       selectedIds: [],
       isDirty: false,
       undoStack: [],
@@ -1768,6 +1853,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       editingCutsceneKeyframeId: null,
       testingCutsceneId: null,
       cutscenePlaying: false,
+      editingNodeGraphObjectId: null,
     })
   },
 

@@ -117,7 +117,7 @@ interface SceneFile {
 }
 
 // Downloads just one scene's own data (objects/groups/settings/animations/
-// cutscenes) as a .json — deliberately lighter than exportProjectFile: no
+// cutscenes/nodeGraphs) as a .json — deliberately lighter than exportProjectFile: no
 // asset blobs embedded, so it's instant and small, but assetId references
 // (imported models/textures/audio) will dangle if opened in a browser that
 // doesn't already have those assets. Reached from the scene list's

@@ -16,6 +16,7 @@ import {
   Trash2,
   Unlink2,
   Upload,
+  Workflow,
   X,
 } from 'lucide-react'
 import { useEditorStore } from '../state/useEditorStore'
@@ -23,6 +24,7 @@ import {
   isCameraKind,
   isImportedModelKind,
   isLightKind,
+  isProceduralKind,
   isSoundKind,
   PRIMITIVE_BASE_SIZE,
   PRIMITIVE_LABEL,
@@ -80,6 +82,60 @@ function AnimationSection({ object }: { object: SceneObject }) {
                 <span className="action-label">Editar animação</span>
               </button>
               <button className="danger" onClick={() => deleteAnimation(clip.id)}>
+                <span className="action-label">Remover</span>
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </>
+  )
+}
+
+// "Nós (TSL)" field-section — same "Criar" -> "Editar"/"Remover" two-state
+// shape as AnimationSection above, opening TslNodeEditor.tsx (a full-screen
+// overlay, see App.tsx's editingNodeGraphObjectId-driven swap) instead of a
+// floating panel. Not shown for procedural-kind objects (barrel/chest/torch/
+// cauldron etc.) — those are multi-submesh groups where each submesh
+// intentionally has its own independently-colored material (see
+// buildWeatheringNode in SceneObjectMesh.tsx); applying one graph's
+// colorNode uniformly across them would flatten that, so this is gated by
+// the caller instead of being checked here.
+function NodeGraphSection({ object }: { object: SceneObject }) {
+  const graph = useEditorStore((s) => s.nodeGraphs.find((g) => g.id === object.nodeGraphId))
+  const createNodeGraphForObject = useEditorStore((s) => s.createNodeGraphForObject)
+  const deleteNodeGraphForObject = useEditorStore((s) => s.deleteNodeGraphForObject)
+  const openNodeEditor = useEditorStore((s) => s.openNodeEditor)
+
+  return (
+    <>
+      <div className="field-section-label">Nós (TSL)</div>
+      <div className="selection-fields">
+        {!graph ? (
+          <button
+            onClick={() => {
+              createNodeGraphForObject(object.id)
+              openNodeEditor(object.id)
+            }}
+          >
+            <span className="action-label">
+              <Workflow size={14} />
+              Criar grafo de nós
+            </span>
+          </button>
+        ) : (
+          <>
+            <div className="field-row">
+              <span className="field-label">Grafo</span>
+              <span className="texture-field-name">
+                {graph.name} · {graph.nodes.length} nós
+              </span>
+            </div>
+            <div className="selection-actions-row">
+              <button onClick={() => openNodeEditor(object.id)}>
+                <span className="action-label">Editar nós</span>
+              </button>
+              <button className="danger" onClick={() => deleteNodeGraphForObject(object.id)}>
                 <span className="action-label">Remover</span>
               </button>
             </div>
@@ -1318,6 +1374,8 @@ export function Inspector() {
           />
         </div>
       </div>
+
+      {!isProceduralKind(object.kind) && <NodeGraphSection object={object} />}
 
       <div className="field-section-label">Visibilidade</div>
       <div className="selection-fields">

@@ -50,6 +50,7 @@ import {
 } from 'three/tsl'
 import type { BlendMode, MaterialSide, MaterialType, ProceduralKind, SceneObject, ShadowMode } from '../types'
 import { useEditorStore } from '../state/useEditorStore'
+import { compileTslGraph } from '../ui/nodeEditor/compileTslGraph'
 import { usePointerClick } from './usePointerClick'
 import {
   computeNormalBias,
@@ -272,6 +273,14 @@ function Material({ object }: { object: SceneObject }) {
   const colorMapTexture = useImageTexture(object.colorMapAssetId)
   const videoMapTexture = useVideoTexture(object.videoMapAssetId)
 
+  // Resolved once here (not inside compileTslGraph.ts) so the node-build
+  // effect below can depend on it directly — same object reference across
+  // unrelated store updates (Zustand's default Object.is selector equality),
+  // so this only actually re-renders when this object's own graph changes.
+  const nodeGraph = useEditorStore((s) =>
+    object.nodeGraphId ? s.nodeGraphs.find((g) => g.id === object.nodeGraphId) : undefined,
+  )
+
   // Dispose the GPU-side resources of the outgoing instance, whether it's
   // being replaced by a materialType change or the object itself is removed.
   useEffect(() => () => material.dispose(), [material])
@@ -281,10 +290,40 @@ function Material({ object }: { object: SceneObject }) {
     // Own Color instance for the expando `weatheringColor` property
     // buildWeatheringNode's `reference('weatheringColor', 'color', ...)`
     // reads live — same idea as the material's own built-in `color`/
-    // `emissive` Color instances, just not a real Material property.
+    // `emissive` Color instances, just not a real Material property. Kept in
+    // this `[material]`-only effect (not the colorNode-build one below,
+    // which also reruns per graph edit) so a node-graph edit doesn't reset
+    // this back to Color's white default before the property-mutation effect
+    // below gets a chance to re-sync it from object.weatheringColor.
     ;(material as WeatheredMaterial).weatheringColor = new Color()
-    material.colorNode = buildWeatheringNode(material)
   }, [material])
+
+  useEffect(() => {
+    // A user-built TSL node graph (see src/ui/nodeEditor/) fully replaces
+    // buildWeatheringNode's colorNode when present and valid — dirtAmount/
+    // wearAmount/weatheringColor become silent no-ops for this object in
+    // that case, same "silent no-op for an inapplicable field" convention as
+    // roughness/metalness on lambert/phong/toon. compileTslGraph never
+    // throws (returns {} on any failure), so this always falls back to the
+    // weathering node when there's no graph, or the graph doesn't wire
+    // anything into its Material Output's Color input.
+    const compiled = nodeGraph ? compileTslGraph(nodeGraph) : {}
+    material.colorNode = compiled.colorNode ?? buildWeatheringNode(material)
+    // NodeMaterial's own build path checks `this.positionNode !== null`, not
+    // a truthiness/undefined check — leaving this `undefined` instead of
+    // explicitly `null` when there's no graph made it try to compile an
+    // AssignNode around `undefined`, breaking every material in the scene
+    // (not just graph-having ones) with "THREE.TSL: Cannot read properties
+    // of undefined (reading 'build')" at SubBuildNode.build.
+    material.positionNode = compiled.positionNode ?? null
+    // This effect can rerun on an already-compiled, already-rendered
+    // material (whenever the graph changes, not just on mount/materialType
+    // change) — without this, reassigning colorNode/positionNode doesn't
+    // visually apply until some unrelated prop change happens to force a
+    // recompile (the same class of bug already hit once with
+    // wireframe/flatShading below).
+    material.needsUpdate = true
+  }, [material, nodeGraph])
 
   useEffect(() => {
     material.color.set(object.color)

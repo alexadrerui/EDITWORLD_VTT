@@ -483,10 +483,18 @@ export function Editor3D() {
   // would have nothing to render against, so it never activates in that case
   // regardless of the scene's own csmEnabled toggle.
   const csmActive = sceneSettings.csmEnabled && quality !== 'low'
+  // TslNodeEditor.tsx is a genuine opaque full-screen overlay (App.tsx keeps
+  // this Canvas mounted underneath it, unlike CutsceneStudio which needs the
+  // live canvas visible) — without pausing the frameloop, this scene (its
+  // own SunCSM shadows/bloom pipeline) kept rendering every frame while
+  // fully hidden, wastefully running two WebGPURenderer instances at once
+  // alongside NodePreviewPane.tsx's own small canvas.
+  const nodeEditorOpen = useEditorStore((s) => s.editingNodeGraphObjectId !== null)
 
   return (
     <Canvas
       shadows={quality !== 'low'}
+      frameloop={nodeEditorOpen ? 'never' : 'always'}
       camera={{ position: [10, 10, 10], fov: 50 }}
       onPointerMissed={() => select(null)}
       gl={
