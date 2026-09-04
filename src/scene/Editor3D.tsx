@@ -493,7 +493,16 @@ export function Editor3D() {
 
   return (
     <Canvas
-      shadows={quality !== 'low'}
+      // R3F's boolean `shadows` prop defaults the renderer to
+      // PCFSoftShadowMap, whose WebGPU filter (PCFSoftShadowFilter, see
+      // three/src/nodes/lighting/ShadowFilterNode.js) samples a fixed
+      // single-texel 2x2 hardware gather and never reads
+      // `light.shadow.radius` at all — so sunShadowBlur/shadow-radius below
+      // (and the per-light shadowRadius in SceneObjectMesh.tsx) silently did
+      // nothing regardless of value. 'percentage' maps to plain
+      // PCFShadowMap, whose filter (PCFShadowFilter) actually scales its
+      // Vogel-disk sample offsets by `shadow.radius`.
+      shadows={quality === 'low' ? false : 'percentage'}
       frameloop={nodeEditorOpen ? 'never' : 'always'}
       camera={{ position: [10, 10, 10], fov: 50 }}
       onPointerMissed={() => select(null)}
